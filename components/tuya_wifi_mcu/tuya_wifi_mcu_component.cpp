@@ -92,7 +92,7 @@ namespace esphome {
     void TuyaWifiMcuComponent::loop() {
       tuya_wifi_->uart_service();
 
-      if (wifi_reset_pin_ != 0 && network::is_connected()) {
+      if (wifi_reset_pin_ != 0) {
         if (digitalRead(wifi_reset_pin_) == LOW) {
           delay(20);
           if (digitalRead(wifi_reset_pin_) == LOW) {
@@ -101,23 +101,27 @@ namespace esphome {
         }
       }
 
-      if (tuya_wifi_->mcu_get_wifi_work_state() == WIFI_CONN_CLOUD) {
-        if (this->wifi_led_state_ == LOW) {
-          this->wifi_led_state_ = HIGH;
-          digitalWrite(wifi_led_pin_, this->wifi_led_state_);
-        }
-      } else if ((tuya_wifi_->mcu_get_wifi_work_state() != WIFI_LOW_POWER) && (tuya_wifi_->mcu_get_wifi_work_state() != WIFI_CONN_CLOUD) && (tuya_wifi_->mcu_get_wifi_work_state() != WIFI_SATE_UNKNOW)) {
-        if (millis()- this->last_wifi_led_state_change_time_ >= 500) {
-          this->last_wifi_led_state_change_time_ = millis();
-
+      if (this->wifi_led_pin_ != 0) {
+        if (tuya_wifi_->mcu_get_wifi_work_state() == WIFI_CONN_CLOUD) {
           if (this->wifi_led_state_ == LOW) {
             this->wifi_led_state_ = HIGH;
-          } else {
-            this->wifi_led_state_ = LOW;
+            digitalWrite(wifi_led_pin_, this->wifi_led_state_);
           }
-          digitalWrite(wifi_led_pin_, this->wifi_led_state_);
+        } else if ((tuya_wifi_->mcu_get_wifi_work_state() != WIFI_LOW_POWER) && (tuya_wifi_->mcu_get_wifi_work_state() != WIFI_CONN_CLOUD) && (tuya_wifi_->mcu_get_wifi_work_state() != WIFI_SATE_UNKNOW)) {
+          if (millis()- this->last_wifi_led_state_change_time_ >= 500) {
+            this->last_wifi_led_state_change_time_ = millis();
+
+            if (this->wifi_led_state_ == LOW) {
+              this->wifi_led_state_ = HIGH;
+            } else {
+              this->wifi_led_state_ = LOW;
+            }
+            digitalWrite(wifi_led_pin_, this->wifi_led_state_);
+          }
         }
       }
+
+      
 
       delay(10);
     }

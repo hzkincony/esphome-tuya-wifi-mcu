@@ -130,7 +130,6 @@ namespace esphome {
     void TuyaWifiMcuComponent::update() {
       // ESP_LOGD(TAG, "TuyaIotComponent::update, wifi_reset_pin=%d, network=%d, switches_.size=%d", this->wifi_reset_pin_, network::is_connected(), switches_.size());
       ESP_LOGD(TAG, "update");
-      ESP_LOGD(TAG, "last_wifi_led_state_change_time_=%d, wifi_led_pin_=%d, wifi_led_state_=%d", this->last_wifi_led_state_change_time_, wifi_led_pin_, wifi_led_state_);
       this->report_tuya_dp_states();
     }
 

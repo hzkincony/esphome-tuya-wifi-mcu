@@ -14,7 +14,8 @@ uart:
   baud_rate: 9600
 
 tuya_wifi_mcu:
-  product_id: tfj1dtlneyxp5uya
+  # tuya mcu product id
+  product_id: xxxxxx 
   uart_id: tuya_mcu_uart
   wifi_reset_pin: 5
   wifi_led_pin: 12
@@ -40,9 +41,10 @@ switch:
       inverted: true
   - platform: tuya_wifi_mcu
     name: e16t-output1-tuya
-    disabled_by_default: false
     dp_id: 1
+    # hide from homeassistant ui
     internal: true
+    # bind other switch, sync state
     bind_switch_id: "e16t_output1"
   - platform: gpio
     name: "e16t-output2"
@@ -54,7 +56,6 @@ switch:
       inverted: true
   - platform: tuya_wifi_mcu
     name: e16t-output2-tuya
-    disabled_by_default: false
     dp_id: 2
     internal: true
     bind_switch_id: "e16t_output2"

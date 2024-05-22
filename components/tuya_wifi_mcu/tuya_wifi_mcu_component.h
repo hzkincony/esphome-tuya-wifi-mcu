@@ -4,35 +4,14 @@
 
 #include "esphome/core/component.h"
 #include "esphome/components/uart/uart.h"
-#include "esphome/components/switch/switch.h"
+#include "tuya_wifi_mcu_entity.h"
 
 #include <TuyaWifi.h>
-
-#define TAG "tuya.wifi.mcu"
 
 namespace esphome {
   namespace tuya_wifi_mcu {
 
-    class TuyaWifiMcuSwitch : public Component, public switch_::Switch {
-    public:
-      void set_dp_id(uint8_t dp_id) { this->dp_id_ = dp_id; };
-      uint8_t get_dp_id() { return this->dp_id_; };
-      void set_tuya_wifi_(TuyaWifi* tuya_wifi) { this->tuya_wifi_ = tuya_wifi;};
-      void set_bind_switch(switch_::Switch* switch_) { 
-        this->is_bind_ = true;
-        this->bind_switch_ = switch_;
-      };
-
-      void setup() override;
-      void write_state(bool state) override;
-      void dump_config() override;
-
-    protected:
-      TuyaWifi* tuya_wifi_;
-      bool is_bind_ = false;
-      switch_::Switch* bind_switch_;
-      uint8_t dp_id_;
-    };
+    static const char *const TAG = "tuya.wifi.mcu"; 
 
     class TuyaWifiMcuComponent : public PollingComponent, public uart::UARTDevice {
     public:
@@ -60,8 +39,8 @@ namespace esphome {
         return this->uart_;
       }
 
-      void register_switch(tuya_wifi_mcu::TuyaWifiMcuSwitch *obj)  {
-        this->switches_.push_back(obj);
+      void register_tuya_wifi_mcu_entity(tuya_wifi_mcu::TuyaWifiMcuEntity *obj)  {
+        this->entities_.push_back(obj);
       };
 
     protected:
@@ -74,7 +53,7 @@ namespace esphome {
       const char* product_id_;
       const char* mcu_version_;
       std::vector<std::array<unsigned char, 2>> dps_;
-      std::vector<tuya_wifi_mcu::TuyaWifiMcuSwitch *> switches_;
+      std::vector<tuya_wifi_mcu::TuyaWifiMcuEntity *> entities_;
     
     private:
       static TuyaWifiMcuComponent* instance;

@@ -2,7 +2,7 @@ import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.components import switch
 from esphome.const import CONF_ID
-from . import TuyaWifiMcuComponent
+from .. import TuyaWifiMcuComponent
 
 DEPENDENCIES = ['tuya_wifi_mcu']
 
@@ -22,7 +22,7 @@ def to_code(config):
     yield cg.register_component(var, config)
     yield switch.register_switch(var, config)
     cg.add(var.set_dp_id(config["dp_id"]))
-    if config["bind_switch_id"]:
+    if "bind_switch_id" in config:
         bind_switch = yield cg.get_variable(config["bind_switch_id"])
         cg.add(var.set_bind_switch(bind_switch))
-    cg.add(paren.register_switch(var))
+    cg.add(paren.register_tuya_wifi_mcu_entity(var))

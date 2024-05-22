@@ -6,44 +6,6 @@
 namespace esphome {
   namespace tuya_wifi_mcu {
 
-    void TuyaWifiMcuSwitch::setup() {
-      ESP_LOGD(TAG, "TuyaWifiMcuSwitch::setup");
-
-      this->add_on_state_callback([this](bool state) {
-        ESP_LOGD(TAG, "state_callback, state=%d", state ? 1 : 0);
-        unsigned char tuya_dp_state = state ? 1 : 0;
-        this->tuya_wifi_->mcu_dp_update(dp_id_, tuya_dp_state, 1);
-        ESP_LOGD(TAG, "updated dp=%d state=%d", dp_id_, tuya_dp_state);
-
-        if (this->is_bind_) {
-          if (state) {
-            this->bind_switch_->turn_on();
-          } else {
-            this->bind_switch_->turn_off();
-          }
-        }
-      });
-
-      if (this->is_bind_) {
-        this->bind_switch_->add_on_state_callback([this](bool state) {
-          ESP_LOGD(TAG, "bind_switch state_callback, state=%d", state ? 1 : 0);
-          if (state) {
-            this->turn_on();
-          } else {
-            this->turn_off();
-          }
-        });
-      }
-      
-    }
-    void TuyaWifiMcuSwitch::dump_config(){
-      ESP_LOGCONFIG(TAG, "TuyaWifiMcuSwitch::dump_config");
-    }
-
-    void TuyaWifiMcuSwitch::write_state(bool state) {
-      this->publish_state(state);
-    }
-
     TuyaWifiMcuComponent* TuyaWifiMcuComponent::instance = nullptr;
 
     void TuyaWifiMcuComponent::setup() {
@@ -61,16 +23,16 @@ namespace esphome {
       tuya_wifi_ = new TuyaWifi(static_cast<esphome::uart::ESP32ArduinoUARTComponent*>(this->uart_)->get_hw_serial());
 
       // set_tuya_wifi for sensors
-      for(auto &switch_ : this->switches_) {
-        switch_->set_tuya_wifi_(tuya_wifi_);
+      for(auto &entity : this->entities_) {
+        entity->set_tuya_wifi(tuya_wifi_);
       }
 
       tuya_wifi_->init(
         const_cast<unsigned char*>(reinterpret_cast<const unsigned char*>(product_id_)),
         const_cast<unsigned char*>(reinterpret_cast<const unsigned char*>(mcu_version_)));
 
-      for(auto &switch_ : this->switches_) {
-        dps_.push_back({switch_->get_dp_id(), DP_TYPE_BOOL});
+      for(auto &entity : this->entities_) {
+        dps_.push_back({entity->get_dp_id(), entity->get_dp_type()});
       }
       
       unsigned char (*dps_array)[2] = new unsigned char[dps_.size()][2];
@@ -144,16 +106,9 @@ namespace esphome {
     unsigned char TuyaWifiMcuComponent::dp_process(unsigned char dpid, const unsigned char value[], unsigned short length) {
       ESP_LOGD(TAG, "dp_process");
 
-      for(auto &switch_ : this->switches_) {
-        if (switch_->get_dp_id() == dpid) {
-          auto state = this->tuya_wifi_->mcu_get_dp_download_data(dpid, value, length);
-          if (state == 1) {
-            switch_->turn_on();
-          } else if (state == 0) {
-            switch_->turn_off();
-          } else {
-            // wrong state
-          }
+      for(auto &entity : this->entities_) {
+        if (entity->get_dp_id() == dpid) {
+          entity->process_dp_data(value, length);
         }
       }
 
@@ -166,10 +121,8 @@ namespace esphome {
     }
 
     void TuyaWifiMcuComponent::report_tuya_dp_states() {
-      for(auto &switch_ : this->switches_) {
-        unsigned char tuya_dp_state = switch_->state ? 1 : 0;
-        this->tuya_wifi_->mcu_dp_update(switch_->get_dp_id(), tuya_dp_state, 1);
-        ESP_LOGD(TAG, "updated dp=%d state=%d", switch_->get_dp_id(), tuya_dp_state);
+      for (auto &entity : this->entities_) {
+        entity->report_tuya_dp_state();
       }
     }
 

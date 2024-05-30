@@ -9,7 +9,8 @@ namespace esphome {
 
     void TuyaWifiMcuComponent::setup() {
       ESP_LOGD(TAG, "TuyaWifiMcuComponent::setup");
-      
+    
+    #if WIFI_CONTROL_SELF_MODE == 0
       if (this->wifi_led_pin_ != 0) {
         pinMode(this->wifi_led_pin_, OUTPUT);
         digitalWrite(this->wifi_led_pin_, LOW);
@@ -18,6 +19,7 @@ namespace esphome {
       if (this->wifi_reset_pin_ != 0) {
         pinMode(this->wifi_reset_pin_, INPUT);
       }
+    #endif
 
       tuya_wifi_ = new TuyaWifi(static_cast<esphome::uart::ESP32ArduinoUARTComponent*>(this->uart_)->get_hw_serial());
 
@@ -44,6 +46,10 @@ namespace esphome {
       tuya_wifi_->set_dp_cmd_total(dps_array, dps_.size());
       tuya_wifi_->dp_process_func_register(static_dp_process);
       tuya_wifi_->dp_update_all_func_register(static_dp_update);
+
+    #if WIFI_CONTROL_SELF_MODE == 1
+      tuya_wifi_->set_state_pin(this->wifi_led_pin_, this->wifi_reset_pin_);
+    #endif
     }
 
     void TuyaWifiMcuComponent::dump_config() {
@@ -52,12 +58,14 @@ namespace esphome {
 
     void TuyaWifiMcuComponent::loop() {
       tuya_wifi_->uart_service();
-
+    
+    #if WIFI_CONTROL_SELF_MODE == 0
       if (wifi_reset_pin_ != 0) {
         if (digitalRead(wifi_reset_pin_) == LOW) {
           delay(20);
           if (digitalRead(wifi_reset_pin_) == LOW) {
-            this->reset_tuya_wifi();
+            ESP_LOGD(TAG, "begin smart config");
+            tuya_wifi_->mcu_set_wifi_mode(SMART_CONFIG);
           }
         }
       }
@@ -81,15 +89,9 @@ namespace esphome {
           }
         }
       }
-
-      
-
       delay(10);
-    }
-
-    void TuyaWifiMcuComponent::reset_tuya_wifi() {
-      ESP_LOGD(TAG, "begin smart config");
-      tuya_wifi_->mcu_set_wifi_mode(SMART_CONFIG);
+    #endif
+      
     }
 
     void TuyaWifiMcuComponent::update() {

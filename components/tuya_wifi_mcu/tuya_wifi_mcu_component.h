@@ -46,8 +46,8 @@ namespace esphome {
       uart::UARTComponent* uart_;
       uint8_t wifi_reset_pin_;
       uint8_t wifi_led_pin_;
-      uint8_t wifi_led_state_ = 0;
-      unsigned long last_wifi_led_state_change_time_ = 0;
+      uint8_t wifi_led_state_{0};
+      unsigned long last_wifi_led_state_change_time_{0};
       const char* product_id_;
       const char* mcu_version_;
       std::vector<std::array<unsigned char, 2>> dps_;

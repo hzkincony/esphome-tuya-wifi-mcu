@@ -24,7 +24,7 @@ CONFIG_SCHEMA = cv.Schema({
 }).extend(cv.COMPONENT_SCHEMA).extend(uart.UART_DEVICE_SCHEMA)
 
 def to_code(config):
-    cg.add_library("tuya/Tuya_WiFi_MCU_SDK", "0.0.3")
+    cg.add_library("Tuya_WiFi_MCU_SDK", "66c750a8d136a766f4f0cedfc44ae6b1f1e9dffa", "https://github.com/idreamshen/tuya-wifi-mcu-sdk-arduino-library.git")
     u = yield cg.get_variable(config["uart_id"])
     var = cg.new_Pvariable(config[CONF_ID], u)
     cg.add(var.set_product_id(config["product_id"]))

@@ -6,8 +6,6 @@
 
 #include "../tuya_wifi_mcu_entity.h"
 
-#include <TuyaWifi.h>
-
 namespace esphome {
   namespace tuya_wifi_mcu {
     class TuyaWifiMcuBinarySensor : public TuyaWifiMcuEntity, public Component, public binary_sensor::BinarySensor {

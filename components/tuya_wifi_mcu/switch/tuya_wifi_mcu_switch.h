@@ -6,8 +6,6 @@
 
 #include "../tuya_wifi_mcu_entity.h"
 
-#include <TuyaWifi.h>
-
 namespace esphome {
   namespace tuya_wifi_mcu {
     class TuyaWifiMcuSwitch : public TuyaWifiMcuEntity, public Component, public switch_::Switch {
@@ -27,10 +25,8 @@ namespace esphome {
       void report_tuya_dp_state() override;
 
     protected:
-      //TuyaWifi* tuya_wifi_;
       bool is_bind_ = false;
       switch_::Switch* bind_switch_;
-      //uint8_t dp_id_;
     };
   }
 }

@@ -2,7 +2,6 @@
 #include "esphome/components/network/util.h"
 #include <string>
 
-
 namespace esphome {
   namespace tuya_wifi_mcu {
 

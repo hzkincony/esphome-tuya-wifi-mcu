@@ -6,8 +6,6 @@
 #include "esphome/components/uart/uart.h"
 #include "tuya_wifi_mcu_entity.h"
 
-#include <TuyaWifi.h>
-
 namespace esphome {
   namespace tuya_wifi_mcu {
 

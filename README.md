@@ -1,11 +1,20 @@
 # esphome-tuya-wifi-mcu
 
 ```yaml
+esphome:
+  name: example_device_name
+  friendly_name: example_device_name
+  platformio_options:
+    board_build.extra_flags:
+      # WIFI_CONTROL_SELF_MODE = 0
+      # WIFI_CONTROL_SELF_MODE = 1
+      - "-DWIFI_CONTROL_SELF_MODE=0"
+
 external_components:
   - source:
       type: git
       url: https://github.com/hzkincony/esphome-tuya-wifi-mcu
-      ref: v1.0.0
+      ref: v1.1.0
 
 uart:
   tx_pin: 33
@@ -59,4 +68,20 @@ switch:
     dp_id: 2
     internal: true
     bind_switch_id: "e16t_output2"
+
+binary_sensor:
+  - platform: template
+    name: "e16t-binary1"
+    id: e16t_binary1
+    lambda: |-
+      if (id(e16t_output1).state) {
+        return true;
+      } else {
+        return false;
+      }
+  - platform: tuya_wifi_mcu
+    name: e16t-binary-tuya
+    dp_id: 110
+    bind_binary_sensor_id: e16t_binary1
+    internal: true
 ```

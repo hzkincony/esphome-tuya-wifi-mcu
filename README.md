@@ -85,4 +85,47 @@ binary_sensor:
     dp_id: 110
     bind_binary_sensor_id: e16t_binary1
     internal: true
+
+gp8403:
+  id: my_gp8403
+  voltage: 10V
+
+output:
+  - platform: gp8403
+    id: gp8403_output_1
+    gp8403_id: my_gp8403
+    channel: 0
+  - platform: gp8403
+    id: gp8403_output_2
+    gp8403_id: my_gp8403
+    channel: 1
+
+light:
+  - platform: monochromatic
+    name: "A32 Pro-DAC-0"
+    id: a32_pro_dac_0
+    output: gp8403_output_1
+
+  - platform: tuya_wifi_mcu
+    name: "Tuya A32 Pro-DAC-0"
+    # bind other light, sync state
+    bind_light_id: a32_pro_dac_0
+    output: gp8403_output_1
+    dp_id: 173
+    # hide from homeassistant ui
+    internal: true
+
+  - platform: monochromatic
+    name: "A32 Pro-DAC-1"
+    id: a32_pro_dac_1
+    output: gp8403_output_2
+
+  - platform: tuya_wifi_mcu
+    name: "Tuya A32 Pro-DAC-1"
+    # bind other light, sync state
+    bind_light_id: a32_pro_dac_1
+    output: gp8403_output_2
+    dp_id: 173
+    # hide from homeassistant ui
+    internal: true
 ```

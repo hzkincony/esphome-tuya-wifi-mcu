@@ -125,7 +125,7 @@ light:
     # bind other light, sync state
     bind_light_id: a32_pro_dac_1
     output: gp8403_output_2
-    dp_id: 173
+    dp_id: 174
     # hide from homeassistant ui
     internal: true
 ```

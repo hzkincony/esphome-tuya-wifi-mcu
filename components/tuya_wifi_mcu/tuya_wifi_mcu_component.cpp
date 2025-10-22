@@ -1,7 +1,6 @@
 #include "tuya_wifi_mcu_component.h"
 #include "esphome/components/network/util.h"
 #include <string>
-#include <HardwareSerial.h>
 
 namespace esphome {
   namespace tuya_wifi_mcu {
@@ -22,31 +21,11 @@ namespace esphome {
       }
     #endif
 
-      // Get the appropriate HardwareSerial based on uart_num
-      HardwareSerial* hw_serial = nullptr;
-      if (this->uart_num_ == 0) {
-        hw_serial = &Serial;
-      } else if (this->uart_num_ == 1) {
-        hw_serial = &Serial1;
-      } else if (this->uart_num_ == 2) {
-        hw_serial = &Serial2;
-      } else {
-        ESP_LOGE(TAG, "Invalid UART number: %d. Using Serial1 as default.", this->uart_num_);
-        hw_serial = &Serial1;
-      }
+      // Create UART wrapper that delegates to ESPHome's UART
+      this->uart_wrapper_ = new UARTWrapper(this->uart_);
+      ESP_LOGD(TAG, "Using ESPHome UART component for Tuya communication");
 
-      // Initialize the HardwareSerial with pins and baud rate if provided
-      if (this->uart_tx_pin_ >= 0 && this->uart_rx_pin_ >= 0) {
-        ESP_LOGD(TAG, "Initializing UART%d with TX:%d, RX:%d, Baud:%d",
-                 this->uart_num_, this->uart_tx_pin_, this->uart_rx_pin_, this->uart_baud_rate_);
-        hw_serial->begin(this->uart_baud_rate_, SERIAL_8N1, this->uart_rx_pin_, this->uart_tx_pin_);
-      } else {
-        ESP_LOGD(TAG, "Initializing UART%d with Baud:%d (using default pins)",
-                 this->uart_num_, this->uart_baud_rate_);
-        hw_serial->begin(this->uart_baud_rate_);
-      }
-
-      tuya_wifi_ = new TuyaWifi(hw_serial);
+      tuya_wifi_ = new TuyaWifi(this->uart_wrapper_);
 
       // set_tuya_wifi for sensors
       for(auto &entity : this->entities_) {

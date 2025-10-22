@@ -127,3 +127,4 @@ The Tuya SDK requires static C callbacks. The component uses a singleton pattern
 ## Hardware Context
 
 Designed for KinCony ESP32 boards with Tuya WiFi MCU modules connected via UART. Common use cases include multi-relay boards (e.g., KC868-E16T) and DAC-based dimmer boards (e.g., KC868-A32 Pro).
+- /root/projects/github/esphome read-only

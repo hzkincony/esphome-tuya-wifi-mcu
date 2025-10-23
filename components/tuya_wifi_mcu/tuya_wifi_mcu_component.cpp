@@ -9,7 +9,7 @@ namespace esphome {
 
     void TuyaWifiMcuComponent::setup() {
       ESP_LOGD(TAG, "TuyaWifiMcuComponent::setup");
-    
+
     #if WIFI_CONTROL_SELF_MODE == 0
       if (this->wifi_led_pin_ != 0) {
         pinMode(this->wifi_led_pin_, OUTPUT);
@@ -21,7 +21,11 @@ namespace esphome {
       }
     #endif
 
-      tuya_wifi_ = new TuyaWifi(static_cast<esphome::uart::ESP32ArduinoUARTComponent*>(this->uart_)->get_hw_serial());
+      // Create UART wrapper that delegates to ESPHome's UART
+      this->uart_wrapper_ = new UARTWrapper(this->uart_);
+      ESP_LOGD(TAG, "Using ESPHome UART component for Tuya communication");
+
+      tuya_wifi_ = new TuyaWifi(this->uart_wrapper_);
 
       // set_tuya_wifi for sensors
       for(auto &entity : this->entities_) {

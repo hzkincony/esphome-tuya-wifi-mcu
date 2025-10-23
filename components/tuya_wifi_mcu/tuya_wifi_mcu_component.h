@@ -5,6 +5,7 @@
 #include "esphome/core/component.h"
 #include "esphome/components/uart/uart.h"
 #include "tuya_wifi_mcu_entity.h"
+#include "uart_wrapper.h"
 
 namespace esphome {
   namespace tuya_wifi_mcu {
@@ -44,6 +45,7 @@ namespace esphome {
     protected:
       TuyaWifi* tuya_wifi_;
       uart::UARTComponent* uart_;
+      UARTWrapper* uart_wrapper_{nullptr};
       uint8_t wifi_reset_pin_;
       uint8_t wifi_led_pin_;
       uint8_t wifi_led_state_{0};

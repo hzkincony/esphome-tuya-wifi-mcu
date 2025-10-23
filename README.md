@@ -15,7 +15,7 @@ external_components:
   - source:
       type: git
       url: https://github.com/hzkincony/esphome-tuya-wifi-mcu
-      ref: v1.1.0
+      ref: v1.3.0
 
 uart:
   tx_pin: 33
@@ -25,7 +25,7 @@ uart:
 
 tuya_wifi_mcu:
   # tuya mcu product id
-  product_id: xxxxxx 
+  product_id: xxxxxx
   uart_id: tuya_mcu_uart
   wifi_reset_pin: 5
   wifi_led_pin: 12

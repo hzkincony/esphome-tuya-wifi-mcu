@@ -9,7 +9,7 @@ DEPENDENCIES = ['tuya_wifi_mcu']
 tuya_wifi_mcu_ns = cg.esphome_ns.namespace('tuya_wifi_mcu')
 tuyaWifiMcuBinarySensor = tuya_wifi_mcu_ns.class_('TuyaWifiMcuBinarySensor', binary_sensor.BinarySensor, cg.Component)
 
-CONFIG_SCHEMA = binary_sensor.BINARY_SENSOR_SCHEMA.extend({
+CONFIG_SCHEMA = binary_sensor.binary_sensor_schema(tuyaWifiMcuBinarySensor).extend({
     cv.GenerateID(): cv.declare_id(tuyaWifiMcuBinarySensor),
     cv.GenerateID("tuya_wifi_mcu_id"): cv.use_id(TuyaWifiMcuComponent),
     cv.Required("dp_id"): cv.int_,

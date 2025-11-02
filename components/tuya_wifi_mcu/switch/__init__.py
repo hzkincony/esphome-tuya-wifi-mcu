@@ -9,7 +9,7 @@ DEPENDENCIES = ['tuya_wifi_mcu']
 tuya_wifi_mcu_ns = cg.esphome_ns.namespace('tuya_wifi_mcu')
 tuyaWifiMcuSwitch = tuya_wifi_mcu_ns.class_('TuyaWifiMcuSwitch', switch.Switch, cg.Component)
 
-CONFIG_SCHEMA = switch.SWITCH_SCHEMA.extend({
+CONFIG_SCHEMA = switch.switch_schema(tuyaWifiMcuSwitch).extend({
     cv.GenerateID(): cv.declare_id(tuyaWifiMcuSwitch),
     cv.GenerateID("tuya_wifi_mcu_id"): cv.use_id(TuyaWifiMcuComponent),
     cv.Required("dp_id"): cv.int_,

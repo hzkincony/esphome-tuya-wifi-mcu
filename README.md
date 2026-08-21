@@ -131,4 +131,4 @@ CI validates and compiles four combinations with ESPHome 2026.8.0:
 - ESP-IDF + MCU-managed WiFi controls
 - ESP-IDF + Tuya-module controls
 
-The framework-independent protocol parser also has host tests for framing, checksums, fragmentation, malformed input, resynchronization, Boolean DPs, and value DPs.
+The framework-independent protocol layer also has host tests for framing, checksums, fragmentation, malformed input, resynchronization, Boolean DP frame encoding, and four-byte value encoding.

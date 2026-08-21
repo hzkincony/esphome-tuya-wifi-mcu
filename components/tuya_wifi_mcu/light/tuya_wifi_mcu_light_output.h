@@ -22,6 +22,7 @@ class TuyaWifiMcuLightOutput : public TuyaWifiMcuEntity,
   TuyaDpType get_dp_type() const override { return TuyaDpType::VALUE; }
 
   void setup() override;
+  void setup_state(light::LightState *state) override { this->own_state_ = state; }
   light::LightTraits get_traits() override;
   void write_state(light::LightState *state) override;
   void on_light_remote_values_update() override;

@@ -76,12 +76,25 @@ bool TuyaWifiMcuLightOutput::process_dp_data(const uint8_t *value, uint16_t leng
 
   this->tuya_brightness_ = tuya_brightness;
   const float brightness = static_cast<float>(tuya_brightness) / 100.0f;
-  const float output_level = this->bind_light_ != nullptr
-                                 ? this->bind_light_->gamma_correct_lut(brightness)
-                                 : (this->own_state_ != nullptr ? this->own_state_->gamma_correct_lut(brightness)
-                                                                : brightness);
+
   this->syncing_ = true;
-  this->output_->set_level(output_level);
+  if (this->own_state_ != nullptr) {
+    auto call = this->own_state_->make_call();
+    call.set_state(tuya_brightness != 0);
+    call.set_brightness(brightness);
+    call.set_transition_length(0);
+    call.perform();
+  }
+  if (this->bind_light_ != nullptr && this->bind_light_ != this->own_state_) {
+    auto call = this->bind_light_->make_call();
+    call.set_state(tuya_brightness != 0);
+    call.set_brightness(brightness);
+    call.set_transition_length(0);
+    call.perform();
+  }
+  if (this->own_state_ == nullptr && this->bind_light_ == nullptr) {
+    this->output_->set_level(brightness);
+  }
   this->syncing_ = false;
   return true;
 }

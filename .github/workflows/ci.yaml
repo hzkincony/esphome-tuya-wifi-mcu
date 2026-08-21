@@ -1,8 +1,8 @@
-name: Release
+name: CI
 
 on:
-  release:
-    types: [published]
+  push:
+  pull_request:
 
 jobs:
   protocol-test:
@@ -35,25 +35,7 @@ jobs:
           cache: pip
       - name: Install ESPHome
         run: python -m pip install "esphome==2026.8.0"
+      - name: Validate configuration
+        run: esphome config tests/compile/${{ matrix.fixture }}.yaml
       - name: Compile firmware
         run: esphome compile tests/compile/${{ matrix.fixture }}.yaml
-
-  release-zip:
-    needs: [protocol-test, compile]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-      - name: ZIP component directory
-        run: |
-          cd "${{ github.workspace }}/components"
-          zip -r tuya_wifi_mcu.zip ./
-      - name: Upload ZIP to release
-        uses: svenstaro/upload-release-action@v2
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ${{ github.workspace }}/components/tuya_wifi_mcu.zip
-          asset_name: tuya_wifi_mcu.zip
-          tag: ${{ github.ref }}
-          overwrite: true

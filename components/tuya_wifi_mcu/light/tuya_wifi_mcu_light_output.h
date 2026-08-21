@@ -1,42 +1,41 @@
 #pragma once
 
-#include "esphome.h"
-#include "esphome/core/component.h"
-#include "esphome/components/output/float_output.h"
+#include <cstdint>
+
 #include "esphome/components/light/light_output.h"
+#include "esphome/components/output/float_output.h"
+#include "esphome/core/component.h"
 
 #include "../tuya_wifi_mcu_entity.h"
 
 namespace esphome {
-  namespace tuya_wifi_mcu {
-    class TuyaWifiMcuLightOutput : public TuyaWifiMcuEntity, public Component, public light::LightOutput {
-    public:
-      void set_dp_id(uint8_t dp_id) { this->dp_id_ = dp_id; };
-      void set_bind_light(light::LightState* light) { 
-        this->is_bind_ = true;
-        this->bind_light_ = light;
-      };
+namespace tuya_wifi_mcu {
 
-      uint8_t get_dp_type() { return DP_TYPE_VALUE; };
+class TuyaWifiMcuLightOutput : public TuyaWifiMcuEntity,
+                              public Component,
+                              public light::LightOutput,
+                              public light::LightRemoteValuesListener {
+ public:
+  void set_bind_light(light::LightState *light) { this->bind_light_ = light; }
+  void set_output(output::FloatOutput *output) { this->output_ = output; }
 
-      void setup() override;
-      void set_output(output::FloatOutput *output) { output_ = output; }
-      light::LightTraits get_traits() override {
-        auto traits = light::LightTraits();
-        traits.set_supported_color_modes({light::ColorMode::BRIGHTNESS});
-        return traits;
-      }
-      void write_state(light::LightState *state);
-      void dump_config() override;
-      void process_dp_data(const unsigned char value[], unsigned short length) override;
-      void report_tuya_dp_state() override;
+  TuyaDpType get_dp_type() const override { return TuyaDpType::VALUE; }
 
-    protected:
-      bool is_bind_{false};
-      light::LightState* bind_light_;
-      float state_{0};
-      output::FloatOutput *output_;
-      uint8_t tuya_bright_;
-    };
-  }
-}
+  void setup() override;
+  light::LightTraits get_traits() override;
+  void write_state(light::LightState *state) override;
+  void on_light_remote_values_update() override;
+  void dump_config() override;
+  bool process_dp_data(const uint8_t *value, uint16_t length) override;
+  void report_tuya_dp_state() override;
+
+ protected:
+  light::LightState *bind_light_{nullptr};
+  light::LightState *own_state_{nullptr};
+  output::FloatOutput *output_{nullptr};
+  uint32_t tuya_brightness_{0};
+  bool syncing_{false};
+};
+
+}  // namespace tuya_wifi_mcu
+}  // namespace esphome

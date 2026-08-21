@@ -1,131 +1,134 @@
-# esphome-tuya-wifi-mcu
-more information, you can check with KinCony's webpage: https://www.kincony.com
+# ESPHome Tuya WiFi MCU
+
+ESPHome external component for ESP32 devices that communicate with a Tuya WiFi MCU module over UART. The component supports both ESPHome frameworks:
+
+- Arduino
+- ESP-IDF
+
+The Tuya serial protocol implementation is included in this component and no longer depends on the Arduino-only `Tuya_WiFi_MCU_SDK` library.
+
+More KinCony hardware information: https://www.kincony.com
+
+## Basic configuration
 
 ```yaml
-esphome:
-  name: example_device_name
-  friendly_name: example_device_name
-  platformio_options:
-    board_build.extra_flags:
-      # WIFI_CONTROL_SELF_MODE = 0
-      # WIFI_CONTROL_SELF_MODE = 1
-      - "-DWIFI_CONTROL_SELF_MODE=0"
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: esp-idf  # or arduino
 
 external_components:
   - source:
       type: git
       url: https://github.com/hzkincony/esphome-tuya-wifi-mcu
-      ref: v1.3.1
+      ref: main
 
 uart:
-  tx_pin: 33
-  rx_pin: 14
   id: tuya_mcu_uart
+  tx_pin: GPIO33
+  rx_pin: GPIO14
   baud_rate: 9600
 
 tuya_wifi_mcu:
-  # tuya mcu product id
-  product_id: xxxxxx
+  product_id: "abcdefghijklmnop"
+  mcu_version: "1.0.0"
   uart_id: tuya_mcu_uart
-  wifi_reset_pin: 5
-  wifi_led_pin: 12
+  wifi_control_mode: mcu
+  wifi_reset_pin:
+    number: GPIO5
+    mode: INPUT_PULLUP
+  wifi_led_pin: GPIO12
+```
 
-i2c:
-  sda: 16
-  scl: 15
-  scan: true
-  id: bus_a
+## WiFi control modes
 
-pcf8574:
-  - id: 'pcf8574_hub_out_1'  # for output channel 1-8
-    address: 0x21
+### `wifi_control_mode: mcu`
 
+ESPHome handles the reset button and WiFi status LED. This is the default and is equivalent to the previous `WIFI_CONTROL_SELF_MODE=0` build flag.
+
+- `wifi_reset_pin` is an optional ESPHome input pin. The button is active-low by default.
+- `wifi_led_pin` is an optional ESPHome output pin.
+- Integer GPIO shorthand remains supported.
+
+### `wifi_control_mode: module`
+
+The Tuya WiFi module handles its own reset button and status LED. This is equivalent to the previous `WIFI_CONTROL_SELF_MODE=1` build flag.
+
+In this mode, `wifi_reset_pin` and `wifi_led_pin` are required numeric pin identifiers for the Tuya module. They are not ESP32 GPIOs.
+
+```yaml
+tuya_wifi_mcu:
+  product_id: "abcdefghijklmnop"
+  uart_id: tuya_mcu_uart
+  wifi_control_mode: module
+  wifi_reset_pin: 1
+  wifi_led_pin: 2
+```
+
+## Entities
+
+All Tuya entities require a one-byte `dp_id` in the range 1–255. Optional bind IDs synchronize the Tuya entity with another local ESPHome entity.
+
+```yaml
 switch:
   - platform: gpio
-    name: "e16t-output1"
-    id: "e16t_output1"
-    pin:
-      pcf8574: pcf8574_hub_out_1
-      number: 0
-      mode: OUTPUT
-      inverted: true
+    id: relay_1
+    pin: GPIO4
+
   - platform: tuya_wifi_mcu
-    name: e16t-output1-tuya
+    id: relay_1_tuya
     dp_id: 1
-    # hide from homeassistant ui
+    bind_switch_id: relay_1
     internal: true
-    # bind other switch, sync state
-    bind_switch_id: "e16t_output1"
-  - platform: gpio
-    name: "e16t-output2"
-    id: "e16t_output2"
-    pin:
-      pcf8574: pcf8574_hub_out_1
-      number: 1
-      mode: OUTPUT
-      inverted: true
-  - platform: tuya_wifi_mcu
-    name: e16t-output2-tuya
-    dp_id: 2
-    internal: true
-    bind_switch_id: "e16t_output2"
 
 binary_sensor:
   - platform: template
-    name: "e16t-binary1"
-    id: e16t_binary1
-    lambda: |-
-      if (id(e16t_output1).state) {
-        return true;
-      } else {
-        return false;
-      }
+    id: input_1
+    lambda: return false;
+
   - platform: tuya_wifi_mcu
-    name: e16t-binary-tuya
+    id: input_1_tuya
     dp_id: 110
-    bind_binary_sensor_id: e16t_binary1
+    bind_binary_sensor_id: input_1
     internal: true
+```
 
-gp8403:
-  id: my_gp8403
-  voltage: 10V
+Brightness lights use a Tuya `value` DP encoded as a four-byte big-endian value. This component currently maps brightness to the range 0–100.
 
+```yaml
 output:
-  - platform: gp8403
-    id: gp8403_output_1
-    gp8403_id: my_gp8403
-    channel: 0
-  - platform: gp8403
-    id: gp8403_output_2
-    gp8403_id: my_gp8403
-    channel: 1
+  - platform: ledc
+    id: dimmer_output
+    pin: GPIO18
 
 light:
   - platform: monochromatic
-    name: "A32 Pro-DAC-0"
-    id: a32_pro_dac_0
-    output: gp8403_output_1
+    id: local_dimmer
+    output: dimmer_output
 
   - platform: tuya_wifi_mcu
-    name: "Tuya A32 Pro-DAC-0"
-    # bind other light, sync state
-    bind_light_id: a32_pro_dac_0
-    output: gp8403_output_1
+    id: tuya_dimmer
+    output: dimmer_output
+    bind_light_id: local_dimmer
     dp_id: 173
-    # hide from homeassistant ui
-    internal: true
-
-  - platform: monochromatic
-    name: "A32 Pro-DAC-1"
-    id: a32_pro_dac_1
-    output: gp8403_output_2
-
-  - platform: tuya_wifi_mcu
-    name: "Tuya A32 Pro-DAC-1"
-    # bind other light, sync state
-    bind_light_id: a32_pro_dac_1
-    output: gp8403_output_2
-    dp_id: 174
-    # hide from homeassistant ui
     internal: true
 ```
+
+## Migration from v1.x
+
+1. Remove `WIFI_CONTROL_SELF_MODE` from `platformio_options` or other compiler flags.
+2. Add `wifi_control_mode: mcu` for ESPHome-managed control, or `wifi_control_mode: module` for Tuya-module self-processing.
+3. Rename the misspelled `mcu_verersion` option to `mcu_version`. The legacy spelling is still accepted for compatibility, but both spellings cannot be used together.
+4. No external Tuya Arduino SDK is required.
+5. Arduino and ESP-IDF use the same component and entity YAML.
+
+## Verification
+
+CI validates and compiles four combinations with ESPHome 2026.8.0:
+
+- Arduino + MCU-managed WiFi controls
+- Arduino + Tuya-module controls
+- ESP-IDF + MCU-managed WiFi controls
+- ESP-IDF + Tuya-module controls
+
+The framework-independent protocol parser also has host tests for framing, checksums, fragmentation, malformed input, resynchronization, Boolean DPs, and value DPs.

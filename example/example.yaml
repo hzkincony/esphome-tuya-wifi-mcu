@@ -1,11 +1,6 @@
 esphome:
   name: example_device_name
   friendly_name: example_device_name
-  platformio_options:
-    board_build.extra_flags:
-      # WIFI_CONTROL_SELF_MODE = 0
-      # WIFI_CONTROL_SELF_MODE = 1
-      - "-DWIFI_CONTROL_SELF_MODE=0"
 
 esp32:
   board: esp32-s3-devkitc-1
@@ -33,9 +28,11 @@ uart:
   baud_rate: 9600
 
 tuya_wifi_mcu:
-  # tuya mcu product id
+  # Tuya MCU product ID
   product_id: xxxxxx
+  mcu_version: "1.0.0"
   uart_id: tuya_mcu_uart
+  wifi_control_mode: mcu
   wifi_reset_pin: 5
   wifi_led_pin: 12
 

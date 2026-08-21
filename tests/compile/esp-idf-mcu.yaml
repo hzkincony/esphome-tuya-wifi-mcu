@@ -1,0 +1,67 @@
+esphome:
+  name: tuya-idf-mcu-test
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+logger:
+
+external_components:
+  - source:
+      type: local
+      path: ../../components
+
+uart:
+  id: tuya_uart
+  tx_pin: GPIO17
+  rx_pin: GPIO16
+  baud_rate: 9600
+
+tuya_wifi_mcu:
+  product_id: "abcdefghijklmnop"
+  mcu_version: "1.0.0"
+  uart_id: tuya_uart
+  wifi_control_mode: mcu
+  wifi_reset_pin:
+    number: GPIO4
+    mode: INPUT_PULLUP
+  wifi_led_pin:
+    number: GPIO2
+    mode: OUTPUT
+
+switch:
+  - platform: template
+    id: local_switch
+    optimistic: true
+  - platform: tuya_wifi_mcu
+    id: tuya_switch
+    dp_id: 1
+    bind_switch_id: local_switch
+
+binary_sensor:
+  - platform: template
+    id: local_binary_sensor
+    lambda: return false;
+  - platform: tuya_wifi_mcu
+    id: tuya_binary_sensor
+    dp_id: 2
+    bind_binary_sensor_id: local_binary_sensor
+
+output:
+  - platform: template
+    id: test_output
+    type: float
+    write_action:
+      - lambda: return;
+
+light:
+  - platform: monochromatic
+    id: local_light
+    output: test_output
+  - platform: tuya_wifi_mcu
+    id: tuya_light
+    output: test_output
+    bind_light_id: local_light
+    dp_id: 3

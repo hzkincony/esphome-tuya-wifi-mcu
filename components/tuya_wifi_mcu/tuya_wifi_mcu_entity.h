@@ -1,20 +1,32 @@
 #pragma once
 
-#include <TuyaWifi.h>
+#include <cstdint>
+
+#include "tuya_protocol.h"
 
 namespace esphome {
-  namespace tuya_wifi_mcu {
-    class TuyaWifiMcuEntity {
-        public:
-            void set_tuya_wifi(TuyaWifi* tuya_wifi) { this->tuya_wifi_ = tuya_wifi;};
-            uint8_t get_dp_id() { return this->dp_id_; };
+namespace tuya_wifi_mcu {
 
-            virtual uint8_t get_dp_type()=0;
-            virtual void report_tuya_dp_state() {};
-            virtual void process_dp_data(const unsigned char value[], unsigned short length) {};
-        protected:
-            TuyaWifi* tuya_wifi_;
-            uint8_t dp_id_;
-    };
-  }
-}
+class TuyaWifiMcuComponent;
+
+class TuyaWifiMcuEntity {
+ public:
+  void set_parent(TuyaWifiMcuComponent *parent) { this->parent_ = parent; }
+  void set_dp_id(uint8_t dp_id) { this->dp_id_ = dp_id; }
+  uint8_t get_dp_id() const { return this->dp_id_; }
+
+  void set_processing_remote(bool processing_remote) { this->processing_remote_ = processing_remote; }
+  bool is_processing_remote() const { return this->processing_remote_; }
+
+  virtual TuyaDpType get_dp_type() const = 0;
+  virtual void report_tuya_dp_state() = 0;
+  virtual bool process_dp_data(const uint8_t *value, uint16_t length) = 0;
+
+ protected:
+  TuyaWifiMcuComponent *parent_{nullptr};
+  uint8_t dp_id_{0};
+  bool processing_remote_{false};
+};
+
+}  // namespace tuya_wifi_mcu
+}  // namespace esphome

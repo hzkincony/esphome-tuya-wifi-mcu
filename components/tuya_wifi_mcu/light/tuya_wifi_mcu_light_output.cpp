@@ -1,10 +1,8 @@
 #include "tuya_wifi_mcu_light_output.h"
 
-#include <algorithm>
-#include <cmath>
-
 #include "esphome/core/helpers.h"
 
+#include "../tuya_brightness.h"
 #include "../tuya_wifi_mcu_component.h"
 
 namespace esphome {
@@ -28,9 +26,8 @@ void TuyaWifiMcuLightOutput::on_light_remote_values_update() {
   }
 
   float brightness;
-  this->bind_light_->current_values_as_brightness(&brightness);
-  const float linear = std::max(0.0f, std::min(1.0f, this->bind_light_->gamma_uncorrect_lut(brightness)));
-  const uint32_t tuya_brightness = static_cast<uint32_t>(std::lround(linear * 100.0f));
+  this->bind_light_->remote_values.as_brightness(&brightness);
+  const uint32_t tuya_brightness = tuya_brightness_from_linear(brightness);
   if (this->tuya_brightness_ == tuya_brightness) {
     return;
   }
@@ -50,10 +47,12 @@ void TuyaWifiMcuLightOutput::write_state(light::LightState *state) {
   this->own_state_ = state;
   float brightness;
   state->current_values_as_brightness(&brightness);
-  const float linear = std::max(0.0f, std::min(1.0f, state->gamma_uncorrect_lut(brightness)));
-  const uint32_t tuya_brightness = static_cast<uint32_t>(std::lround(linear * 100.0f));
-
   this->output_->set_level(brightness);
+
+  float logical_brightness;
+  const auto &logical_values = state->is_transformer_active() ? state->remote_values : state->current_values;
+  logical_values.as_brightness(&logical_brightness);
+  const uint32_t tuya_brightness = tuya_brightness_from_linear(logical_brightness);
   if (this->tuya_brightness_ != tuya_brightness) {
     this->tuya_brightness_ = tuya_brightness;
     if (!this->is_processing_remote()) {

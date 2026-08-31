@@ -7,6 +7,7 @@ void TuyaProtocolParser::reset() {
   this->state_ = State::WAIT_HEADER_55;
   this->payload_length_ = 0;
   this->payload_position_ = 0;
+  this->skip_remaining_ = 0;
   this->checksum_ = 0;
   this->frame_active_ = false;
 }
@@ -28,10 +29,6 @@ void TuyaProtocolParser::reset_with_byte_(uint8_t byte, uint32_t now) {
 }
 
 void TuyaProtocolParser::feed(uint8_t byte, uint32_t now) {
-  if (this->frame_active_ && now - this->last_byte_time_ > INTER_BYTE_TIMEOUT_MS) {
-    this->timeout_errors_++;
-    this->reset();
-  }
   this->last_byte_time_ = now;
 
   switch (this->state_) {
@@ -80,7 +77,8 @@ void TuyaProtocolParser::feed(uint8_t byte, uint32_t now) {
       this->checksum_ += byte;
       if (this->payload_length_ > MAX_PAYLOAD_SIZE) {
         this->oversize_errors_++;
-        this->reset_with_byte_(byte, now);
+        this->skip_remaining_ = static_cast<uint32_t>(this->payload_length_) + 1;
+        this->state_ = State::SKIP_OVERSIZE;
         return;
       }
       this->payload_position_ = 0;
@@ -106,6 +104,12 @@ void TuyaProtocolParser::feed(uint8_t byte, uint32_t now) {
       } else {
         this->checksum_errors_++;
         this->reset_with_byte_(byte, now);
+      }
+      return;
+
+    case State::SKIP_OVERSIZE:
+      if (--this->skip_remaining_ == 0) {
+        this->reset();
       }
       return;
   }

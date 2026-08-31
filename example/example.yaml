@@ -26,6 +26,7 @@ uart:
   rx_pin: 14
   id: tuya_mcu_uart
   baud_rate: 9600
+  rx_buffer_size: 1024
 
 tuya_wifi_mcu:
   # Tuya MCU product ID

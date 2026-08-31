@@ -42,7 +42,7 @@ class TuyaProtocolListener {
 
 class TuyaProtocolParser {
  public:
-  static constexpr uint16_t MAX_PAYLOAD_SIZE = 256;
+  static constexpr uint16_t MAX_PAYLOAD_SIZE = 1024;
   static constexpr uint32_t INTER_BYTE_TIMEOUT_MS = 100;
 
   explicit TuyaProtocolParser(TuyaProtocolListener *listener) : listener_(listener) {}
@@ -66,6 +66,7 @@ class TuyaProtocolParser {
     READ_LENGTH_LOW,
     READ_PAYLOAD,
     READ_CHECKSUM,
+    SKIP_OVERSIZE,
   };
 
   void start_frame_(uint32_t now);
@@ -76,6 +77,7 @@ class TuyaProtocolParser {
   std::array<uint8_t, MAX_PAYLOAD_SIZE> payload_{};
   uint16_t payload_length_{0};
   uint16_t payload_position_{0};
+  uint32_t skip_remaining_{0};
   uint8_t version_{0};
   uint8_t command_{0};
   uint8_t checksum_{0};

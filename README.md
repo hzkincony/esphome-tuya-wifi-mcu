@@ -28,6 +28,7 @@ uart:
   tx_pin: GPIO33
   rx_pin: GPIO14
   baud_rate: 9600
+  rx_buffer_size: 1024
 
 tuya_wifi_mcu:
   product_id: "abcdefghijklmnop"
@@ -46,15 +47,15 @@ tuya_wifi_mcu:
 
 ESPHome handles the reset button and WiFi status LED. This is the default and is equivalent to the previous `WIFI_CONTROL_SELF_MODE=0` build flag.
 
-- `wifi_reset_pin` is an optional ESPHome input pin. The button is active-low by default.
+- `wifi_reset_pin` is an optional ESPHome input pin. The button is active-low by default; set `inverted: false` for an active-high button.
 - `wifi_led_pin` is an optional ESPHome output pin.
-- Integer GPIO shorthand remains supported.
+- Integer GPIO shorthand remains supported. For v1 compatibility, a bare integer `0` disables either optional pin. Use `GPIO0` or `{number: GPIO0}` when the ESP32 GPIO0 pin is intended.
 
 ### `wifi_control_mode: module`
 
 The Tuya WiFi module handles its own reset button and status LED. This is equivalent to the previous `WIFI_CONTROL_SELF_MODE=1` build flag.
 
-In this mode, `wifi_reset_pin` and `wifi_led_pin` are required numeric pin identifiers for the Tuya module. They are not ESP32 GPIOs.
+In this mode, `wifi_reset_pin` and `wifi_led_pin` are required numeric pin identifiers for the Tuya module. They are not ESP32 GPIOs, and numeric pin `0` remains a valid module pin.
 
 ```yaml
 tuya_wifi_mcu:
@@ -67,7 +68,7 @@ tuya_wifi_mcu:
 
 ## Entities
 
-All Tuya entities require a one-byte `dp_id` in the range 1–255. Optional bind IDs synchronize the Tuya entity with another local ESPHome entity.
+All Tuya entities require a one-byte `dp_id` in the range 1–255. Optional bind IDs synchronize the Tuya entity with another local ESPHome entity. Duplicate IDs remain supported for v1 compatibility: each downloaded record is sent to every entity with the same ID and DP type, with one acknowledgement per record.
 
 ```yaml
 switch:
@@ -116,19 +117,31 @@ light:
 
 ## Migration from v1.x
 
-1. Remove `WIFI_CONTROL_SELF_MODE` from `platformio_options` or other compiler flags.
-2. Add `wifi_control_mode: mcu` for ESPHome-managed control, or `wifi_control_mode: module` for Tuya-module self-processing.
+1. Replace `WIFI_CONTROL_SELF_MODE=0` with `wifi_control_mode: mcu`, or `WIFI_CONTROL_SELF_MODE=1` with `wifi_control_mode: module`. The legacy compiler flag is detected temporarily and emits a deprecation warning; a conflicting flag and YAML mode fail validation.
+2. In MCU mode, replace a bare integer pin `0` with no option when the pin should stay disabled. Explicit `GPIO0` remains a real ESP32 pin.
 3. Rename the misspelled `mcu_verersion` option to `mcu_version`. The legacy spelling is still accepted for compatibility, but both spellings cannot be used together.
 4. No external Tuya Arduino SDK is required.
 5. Arduino and ESP-IDF use the same component and entity YAML.
 
+The protocol parser has a bounded 1024-byte payload capacity. Set the UART `rx_buffer_size` to at least 1024 when the Tuya product may aggregate many DP records into one download frame.
+
 ## Verification
 
-CI validates and compiles four combinations with ESPHome 2026.8.0:
+With Docker installed, the Makefile pins the official `ghcr.io/esphome/esphome:2026.8.0` container for reproducible local validation:
+
+```bash
+make host-test
+make config-all
+make compile-all
+# Or run the complete matrix:
+make ci
+```
+
+Override `ESPHOME_VERSION` or `ESPHOME_IMAGE` only when deliberately testing another ESPHome release. CI validates and compiles four combinations with the same pinned version:
 
 - Arduino + MCU-managed WiFi controls
 - Arduino + Tuya-module controls
 - ESP-IDF + MCU-managed WiFi controls
 - ESP-IDF + Tuya-module controls
 
-The framework-independent protocol layer also has host tests for framing, checksums, fragmentation, malformed input, resynchronization, Boolean DP frame encoding, and four-byte value encoding.
+The framework-independent host tests cover framing, checksums, fragmentation, explicit idle timeout recovery, bounded oversized-frame skipping, duplicate-DP dispatch, brightness conversion, Boolean DP frame encoding, and four-byte value encoding.

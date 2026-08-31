@@ -1,8 +1,19 @@
+import logging
+import re
+
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome import pins
 from esphome.components import uart
-from esphome.const import CONF_ID
+from esphome.const import (
+    CONF_BUILD_FLAGS,
+    CONF_ESPHOME,
+    CONF_ID,
+    CONF_INVERTED,
+    CONF_NUMBER,
+    CONF_PLATFORMIO_OPTIONS,
+)
+from esphome.core import CORE
 
 DEPENDENCIES = ["uart"]
 MULTI_CONF = False
@@ -13,6 +24,11 @@ CONF_LEGACY_MCU_VERSION = "mcu_verersion"
 CONF_WIFI_CONTROL_MODE = "wifi_control_mode"
 CONF_WIFI_RESET_PIN = "wifi_reset_pin"
 CONF_WIFI_LED_PIN = "wifi_led_pin"
+
+_LOGGER = logging.getLogger(__name__)
+_LEGACY_WIFI_CONTROL_FLAG = re.compile(
+    r"(?<!\S)-D\s*WIFI_CONTROL_SELF_MODE(?:\s*=\s*([01]))?(?=\s|$)"
+)
 
 
 tuya_wifi_mcu_ns = cg.esphome_ns.namespace("tuya_wifi_mcu")
@@ -25,6 +41,73 @@ WIFI_CONTROL_MODES = {
     "mcu": WifiControlMode.WIFI_CONTROL_MODE_MCU,
     "module": WifiControlMode.WIFI_CONTROL_MODE_MODULE,
 }
+
+
+def _as_flag_strings(value):
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, (list, tuple)):
+        return [item for item in value if isinstance(item, str)]
+    return []
+
+
+def _legacy_wifi_control_mode():
+    raw_config = getattr(CORE, "raw_config", None) or {}
+    esphome_config = raw_config.get(CONF_ESPHOME) or {}
+    values = _as_flag_strings(esphome_config.get(CONF_BUILD_FLAGS))
+
+    platformio_options = esphome_config.get(CONF_PLATFORMIO_OPTIONS) or {}
+    if isinstance(platformio_options, dict):
+        for key, value in platformio_options.items():
+            if key == CONF_BUILD_FLAGS or str(key).endswith(".extra_flags"):
+                values.extend(_as_flag_strings(value))
+
+    modes = set()
+    for value in values:
+        for match in _LEGACY_WIFI_CONTROL_FLAG.finditer(value):
+            modes.add("module" if match.group(1) in (None, "1") else "mcu")
+
+    if len(modes) > 1:
+        raise cv.Invalid("Conflicting WIFI_CONTROL_SELF_MODE build flags")
+    return next(iter(modes), None)
+
+
+def _normalize_wifi_control_config(config):
+    config = config.copy()
+    legacy_mode = _legacy_wifi_control_mode()
+    configured_mode = config.get(CONF_WIFI_CONTROL_MODE)
+    if configured_mode is not None:
+        configured_mode = cv.string_strict(configured_mode).lower()
+
+    if legacy_mode is not None:
+        _LOGGER.warning(
+            "WIFI_CONTROL_SELF_MODE is deprecated; remove the build flag and use wifi_control_mode: %s",
+            legacy_mode,
+        )
+        if configured_mode is not None and configured_mode != legacy_mode:
+            raise cv.Invalid(
+                "wifi_control_mode conflicts with the deprecated WIFI_CONTROL_SELF_MODE build flag"
+            )
+        config.setdefault(CONF_WIFI_CONTROL_MODE, legacy_mode)
+
+    effective_mode = configured_mode or legacy_mode or "mcu"
+    if effective_mode == "mcu":
+        for key in (CONF_WIFI_RESET_PIN, CONF_WIFI_LED_PIN):
+            value = config.get(key)
+            if isinstance(value, int) and not isinstance(value, bool) and value == 0:
+                config.pop(key)
+    return config
+
+
+def _normalize_reset_pin(value):
+    if isinstance(value, dict):
+        value = value.copy()
+        value.setdefault(CONF_INVERTED, True)
+        return value
+    return {CONF_NUMBER: value, CONF_INVERTED: True}
+
+
+_reset_pin_schema = cv.All(_normalize_reset_pin, pins.gpio_input_pin_schema)
 
 
 def _normalize_mcu_version(config):
@@ -55,11 +138,12 @@ COMMON_SCHEMA = cv.Schema(
 ).extend(cv.COMPONENT_SCHEMA).extend(uart.UART_DEVICE_SCHEMA)
 
 CONFIG_SCHEMA = cv.All(
+    _normalize_wifi_control_config,
     cv.typed_schema(
         {
             "mcu": COMMON_SCHEMA.extend(
                 {
-                    cv.Optional(CONF_WIFI_RESET_PIN): pins.gpio_input_pin_schema,
+                    cv.Optional(CONF_WIFI_RESET_PIN): _reset_pin_schema,
                     cv.Optional(CONF_WIFI_LED_PIN): pins.gpio_output_pin_schema,
                 }
             ),

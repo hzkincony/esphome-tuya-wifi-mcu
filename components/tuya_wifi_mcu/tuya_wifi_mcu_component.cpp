@@ -1,9 +1,12 @@
 #include "tuya_wifi_mcu_component.h"
 
+#include <algorithm>
 #include <cstdio>
 
 #include "esphome/core/hal.h"
 #include "esphome/core/log.h"
+
+#include "tuya_dp_dispatch.h"
 
 namespace esphome {
 namespace tuya_wifi_mcu {
@@ -13,24 +16,16 @@ static constexpr uint8_t WIFI_LOW_POWER = 0x05;
 static constexpr uint8_t SMART_CONFIG = 0x00;
 static constexpr uint32_t RESET_DEBOUNCE_MS = 20;
 static constexpr uint32_t WIFI_LED_BLINK_INTERVAL_MS = 500;
-static constexpr size_t MAX_UART_BYTES_PER_LOOP = 64;
+static constexpr size_t UART_READ_BATCH_SIZE = 64;
 
 void TuyaWifiMcuComponent::setup() {
   ESP_LOGD(TAG, "Setting up Tuya WiFi MCU component");
 
-  for (size_t i = 0; i < this->entities_.size(); i++) {
-    if (this->entities_[i] == nullptr || this->entities_[i]->get_dp_id() == 0) {
+  for (auto *entity : this->entities_) {
+    if (entity == nullptr || entity->get_dp_id() == 0) {
       ESP_LOGE(TAG, "Invalid Tuya entity registration");
       this->mark_failed();
       return;
-    }
-    for (size_t j = i + 1; j < this->entities_.size(); j++) {
-      if (this->entities_[j] != nullptr &&
-          this->entities_[i]->get_dp_id() == this->entities_[j]->get_dp_id()) {
-        ESP_LOGE(TAG, "Duplicate Tuya DP ID %u", this->entities_[i]->get_dp_id());
-        this->mark_failed();
-        return;
-      }
     }
   }
 
@@ -41,10 +36,6 @@ void TuyaWifiMcuComponent::setup() {
     }
     if (this->wifi_reset_pin_ != nullptr) {
       this->wifi_reset_pin_->setup();
-      const bool pressed = !this->wifi_reset_pin_->digital_read();
-      this->reset_raw_pressed_ = pressed;
-      this->reset_stable_pressed_ = pressed;
-      this->reset_press_handled_ = pressed;
     }
   }
 }
@@ -66,14 +57,30 @@ void TuyaWifiMcuComponent::dump_config() {
 }
 
 void TuyaWifiMcuComponent::loop() {
-  const uint32_t now = millis();
-  size_t bytes_read = 0;
-  uint8_t byte;
-  while (bytes_read < MAX_UART_BYTES_PER_LOOP && this->available() && this->read_byte(&byte)) {
-    this->protocol_.feed(byte, now);
-    bytes_read++;
+  std::array<uint8_t, UART_READ_BATCH_SIZE> buffer{};
+  bool uart_idle = false;
+  while (true) {
+    const size_t available = this->available();
+    if (available == 0) {
+      uart_idle = true;
+      break;
+    }
+
+    const size_t length = std::min(available, buffer.size());
+    if (!this->read_array(buffer.data(), length)) {
+      break;
+    }
+
+    const uint32_t read_time = millis();
+    for (size_t i = 0; i < length; i++) {
+      this->protocol_.feed(buffer[i], read_time);
+    }
   }
-  this->protocol_.check_timeout(now);
+
+  const uint32_t now = millis();
+  if (uart_idle) {
+    this->protocol_.check_timeout(now);
+  }
 
   if (this->wifi_control_mode_ == WIFI_CONTROL_MODE_MCU) {
     this->handle_reset_button_(now);
@@ -231,32 +238,15 @@ void TuyaWifiMcuComponent::process_dp_download_(const uint8_t *payload, uint16_t
     const uint8_t *value = payload + offset + 4;
     offset += 4 + length;
 
-    auto *entity = this->find_entity_(dp_id);
-    if (entity == nullptr) {
+    const auto result = dispatch_tuya_dp(this->entities_, dp_id, type, value, length);
+    if (result.id_matches == 0) {
       ESP_LOGW(TAG, "Ignoring unknown Tuya DP %u", dp_id);
-      continue;
-    }
-    if (entity->get_dp_type() != type) {
+    } else if (result.type_matches == 0) {
       ESP_LOGW(TAG, "Ignoring Tuya DP %u with unexpected type %u", dp_id, static_cast<uint8_t>(type));
-      continue;
-    }
-
-    entity->set_processing_remote(true);
-    const bool accepted = entity->process_dp_data(value, length);
-    entity->set_processing_remote(false);
-    if (accepted) {
-      entity->report_tuya_dp_state();
+    } else if (result.accepted == 0) {
+      ESP_LOGW(TAG, "Tuya DP %u was rejected by all matching entities", dp_id);
     }
   }
-}
-
-TuyaWifiMcuEntity *TuyaWifiMcuComponent::find_entity_(uint8_t dp_id) {
-  for (auto *entity : this->entities_) {
-    if (entity != nullptr && entity->get_dp_id() == dp_id) {
-      return entity;
-    }
-  }
-  return nullptr;
 }
 
 void TuyaWifiMcuComponent::report_bool_dp(uint8_t dp_id, bool value) {
@@ -286,7 +276,7 @@ void TuyaWifiMcuComponent::handle_reset_button_(uint32_t now) {
     return;
   }
 
-  const bool pressed = !this->wifi_reset_pin_->digital_read();
+  const bool pressed = this->wifi_reset_pin_->digital_read();
   if (pressed != this->reset_raw_pressed_) {
     this->reset_raw_pressed_ = pressed;
     this->reset_transition_time_ = now;

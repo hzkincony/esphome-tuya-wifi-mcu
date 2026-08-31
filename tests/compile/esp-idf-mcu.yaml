@@ -18,6 +18,7 @@ uart:
   tx_pin: GPIO17
   rx_pin: GPIO16
   baud_rate: 9600
+  rx_buffer_size: 1024
 
 tuya_wifi_mcu:
   product_id: "abcdefghijklmnop"
@@ -25,7 +26,7 @@ tuya_wifi_mcu:
   uart_id: tuya_uart
   wifi_control_mode: mcu
   wifi_reset_pin:
-    number: GPIO4
+    number: GPIO0
     mode: INPUT_PULLUP
   wifi_led_pin:
     number: GPIO2

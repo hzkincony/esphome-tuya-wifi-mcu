@@ -5,40 +5,15 @@ on:
     types: [published]
 
 jobs:
-  protocol-test:
+  verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build and run protocol tests
-        run: |
-          g++ -std=c++17 -Wall -Wextra -Werror \
-            tests/protocol/test_tuya_protocol.cpp \
-            components/tuya_wifi_mcu/tuya_protocol.cpp \
-            -o /tmp/test_tuya_protocol
-          /tmp/test_tuya_protocol
-
-  compile:
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        fixture:
-          - arduino-mcu
-          - arduino-module
-          - esp-idf-mcu
-          - esp-idf-module
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Install ESPHome
-        run: python -m pip install "esphome==2026.8.0"
-      - name: Compile firmware
-        run: esphome compile tests/compile/${{ matrix.fixture }}.yaml
+      - name: Run complete verification matrix
+        run: make ci
 
   release-zip:
-    needs: [protocol-test, compile]
+    needs: verify
     runs-on: ubuntu-latest
     permissions:
       contents: write

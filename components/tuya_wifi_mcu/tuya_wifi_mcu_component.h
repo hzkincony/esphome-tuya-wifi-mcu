@@ -56,9 +56,10 @@ class TuyaWifiMcuComponent : public PollingComponent,
   void on_tuya_frame(const TuyaFrame &frame) override;
 
  protected:
+  static constexpr uint16_t MAX_TX_PAYLOAD_SIZE = 64;
+
   void send_frame_(TuyaCommand command, const uint8_t *payload = nullptr, uint16_t payload_length = 0);
   void process_dp_download_(const uint8_t *payload, uint16_t payload_length);
-  TuyaWifiMcuEntity *find_entity_(uint8_t dp_id);
   bool validate_dp_payload_(const uint8_t *payload, uint16_t payload_length) const;
   void handle_reset_button_(uint32_t now);
   void update_wifi_led_(uint32_t now);
@@ -80,7 +81,7 @@ class TuyaWifiMcuComponent : public PollingComponent,
   bool reset_press_handled_{false};
   uint32_t reset_transition_time_{0};
   std::vector<TuyaWifiMcuEntity *> entities_;
-  std::array<uint8_t, TuyaProtocolParser::MAX_PAYLOAD_SIZE + 7> tx_buffer_{};
+  std::array<uint8_t, MAX_TX_PAYLOAD_SIZE + 7> tx_buffer_{};
 };
 
 }  // namespace tuya_wifi_mcu

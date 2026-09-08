@@ -31,10 +31,25 @@ class TuyaWifiMcuLightOutput : public TuyaWifiMcuEntity,
   void report_tuya_dp_state() override;
 
  protected:
+  class OwnLightListener : public light::LightRemoteValuesListener {
+   public:
+    explicit OwnLightListener(TuyaWifiMcuLightOutput *parent) : parent_(parent) {}
+    void on_light_remote_values_update() override {
+      if (!this->parent_->syncing_) {
+        this->parent_->preserve_downloaded_brightness_ = false;
+      }
+    }
+
+   protected:
+    TuyaWifiMcuLightOutput *parent_;
+  } own_listener_{this};
+
   light::LightState *bind_light_{nullptr};
   light::LightState *own_state_{nullptr};
   output::FloatOutput *output_{nullptr};
-  uint32_t tuya_brightness_{0};
+  uint8_t tuya_brightness_{0};
+  float downloaded_brightness_{0.0f};
+  bool preserve_downloaded_brightness_{false};
   bool syncing_{false};
 };
 

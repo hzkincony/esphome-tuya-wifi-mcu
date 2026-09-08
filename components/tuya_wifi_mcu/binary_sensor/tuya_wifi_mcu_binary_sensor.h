@@ -20,6 +20,7 @@ class TuyaWifiMcuBinarySensor : public TuyaWifiMcuEntity, public Component, publ
   void dump_config() override;
   bool process_dp_data(const uint8_t *value, uint16_t length) override;
   void report_tuya_dp_state() override;
+  void acknowledge_tuya_dp(const uint8_t *value, uint16_t length) override;
 
  protected:
   binary_sensor::BinarySensor *bind_binary_sensor_{nullptr};

@@ -1,0 +1,19 @@
+packages:
+  base: !include host.yaml
+
+substitutions:
+  relay_dp: "256"
+  input_dp: "-1"
+  dimmer_dp: "259"
+
+esphome:
+  name: tuya-host-legacy-e2e
+  platformio_options:
+    build_flags:
+      - -DWIFI_CONTROL_SELF_MODE=1
+
+tuya_wifi_mcu:
+  product_id: 123456789012345678901
+  mcu_version: !remove
+  mcu_verersion: "1.2.34567"
+  wifi_control_mode: !remove

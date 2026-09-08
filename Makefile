@@ -3,7 +3,7 @@ ESPHOME_IMAGE ?= ghcr.io/esphome/esphome:$(ESPHOME_VERSION)
 DOCKER ?= docker
 CXX ?= g++
 BUILD_DIR ?= /tmp/esphome-tuya-wifi-mcu-tests
-FIXTURES := arduino-mcu arduino-module esp-idf-mcu esp-idf-module
+FIXTURES := arduino-mcu arduino-module esp-idf-mcu esp-idf-module legacy-main
 
 DOCKER_RUN = $(DOCKER) run --rm \
 	--user $$(id -u):$$(id -g) \
@@ -51,7 +51,7 @@ e2e-test:
 	$(PYTHON) tests/e2e/test_host.py
 
 config-test:
-	$(PYTHON) tests/config/test_config.py
+	$(PYTHON) -m unittest discover -s tests/config -p 'test_*.py' -v
 
 config:
 	@test -n "$(FIXTURE)" || (printf '%s\n' 'FIXTURE is required' >&2; exit 2)

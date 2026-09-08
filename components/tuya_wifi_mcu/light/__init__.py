@@ -22,7 +22,7 @@ CONFIG_SCHEMA = light.BRIGHTNESS_ONLY_LIGHT_SCHEMA.extend(
         cv.GenerateID(CONF_OUTPUT_ID): cv.declare_id(TuyaWifiMcuLightOutput),
         cv.Required(CONF_OUTPUT): cv.use_id(output.FloatOutput),
         cv.GenerateID(CONF_TUYA_WIFI_MCU_ID): cv.use_id(TuyaWifiMcuComponent),
-        cv.Required(CONF_DP_ID): cv.int_range(min=1, max=255),
+        cv.Required(CONF_DP_ID): cv.int_,
         cv.Optional(CONF_BIND_LIGHT_ID): cv.use_id(light.LightState),
     }
 ).extend(cv.COMPONENT_SCHEMA)
@@ -41,5 +41,5 @@ async def to_code(config):
         bind_light = await cg.get_variable(config[CONF_BIND_LIGHT_ID])
         cg.add(var.set_bind_light(bind_light))
 
-    cg.add(var.set_dp_id(config[CONF_DP_ID]))
+    cg.add(var.set_dp_id(config[CONF_DP_ID] & 0xFF))
     cg.add(parent.register_tuya_wifi_mcu_entity(var))

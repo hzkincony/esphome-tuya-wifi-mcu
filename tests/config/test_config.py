@@ -67,12 +67,14 @@ class WifiControlConfigTest(unittest.TestCase):
                 )
                 self.assertEqual(result[CONF_WIFI_RESET_PIN], pin)
 
-    def test_boolean_false_is_not_a_disable_sentinel(self):
+    def test_legacy_scalar_zero_forms_disable_pins(self):
         self.set_raw_esphome_config({})
-        result = _normalize_wifi_control_config(
-            {CONF_WIFI_CONTROL_MODE: "mcu", CONF_WIFI_RESET_PIN: False}
-        )
-        self.assertIs(result[CONF_WIFI_RESET_PIN], False)
+        for pin in (False, 0.0, "0", "00", "0x00"):
+            with self.subTest(pin=pin):
+                result = _normalize_wifi_control_config(
+                    {CONF_WIFI_CONTROL_MODE: "mcu", CONF_WIFI_RESET_PIN: pin}
+                )
+                self.assertNotIn(CONF_WIFI_RESET_PIN, result)
 
     def test_conflicting_legacy_and_yaml_modes_fail(self):
         self.set_raw_esphome_config({"build_flags": "-DWIFI_CONTROL_SELF_MODE=1"})

@@ -1,0 +1,10 @@
+packages:
+  base: !include host.yaml
+
+esphome:
+  name: tuya-host-filtered-e2e
+
+binary_sensor:
+  - id: !extend tuya_input
+    filters:
+      - delayed_on: 1s

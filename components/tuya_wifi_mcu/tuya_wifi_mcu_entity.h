@@ -20,6 +20,7 @@ class TuyaWifiMcuEntity {
 
   virtual TuyaDpType get_dp_type() const = 0;
   virtual void report_tuya_dp_state() = 0;
+  virtual void acknowledge_tuya_dp(const uint8_t *, uint16_t) { this->report_tuya_dp_state(); }
   virtual bool process_dp_data(const uint8_t *value, uint16_t length) = 0;
 
  protected:

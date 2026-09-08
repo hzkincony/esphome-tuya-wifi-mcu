@@ -94,7 +94,11 @@ def _normalize_wifi_control_config(config):
     if effective_mode == "mcu":
         for key in (CONF_WIFI_RESET_PIN, CONF_WIFI_LED_PIN):
             value = config.get(key)
-            if isinstance(value, int) and not isinstance(value, bool) and value == 0:
+            try:
+                number = cv.int_range(min=0, max=99)(value)
+            except cv.Invalid:
+                continue
+            if number == 0:
                 config.pop(key)
     return config
 
@@ -125,15 +129,9 @@ def _normalize_mcu_version(config):
 COMMON_SCHEMA = cv.Schema(
     {
         cv.GenerateID(): cv.declare_id(TuyaWifiMcuComponent),
-        cv.Required(CONF_PRODUCT_ID): cv.All(
-            cv.string_strict, cv.Length(min=1, max=16)
-        ),
-        cv.Optional(CONF_MCU_VERSION): cv.All(
-            cv.string_strict, cv.Length(min=1, max=5)
-        ),
-        cv.Optional(CONF_LEGACY_MCU_VERSION): cv.All(
-            cv.string_strict, cv.Length(min=1, max=5)
-        ),
+        cv.Required(CONF_PRODUCT_ID): cv.string,
+        cv.Optional(CONF_MCU_VERSION): cv.string,
+        cv.Optional(CONF_LEGACY_MCU_VERSION): cv.string,
     }
 ).extend(cv.COMPONENT_SCHEMA).extend(uart.UART_DEVICE_SCHEMA)
 
@@ -143,14 +141,18 @@ CONFIG_SCHEMA = cv.All(
         {
             "mcu": COMMON_SCHEMA.extend(
                 {
-                    cv.Optional(CONF_WIFI_RESET_PIN): _reset_pin_schema,
-                    cv.Optional(CONF_WIFI_LED_PIN): pins.gpio_output_pin_schema,
+                    cv.Optional(CONF_WIFI_RESET_PIN): cv.Any(
+                        cv.int_range(min=0, max=99), _reset_pin_schema
+                    ),
+                    cv.Optional(CONF_WIFI_LED_PIN): cv.Any(
+                        cv.int_range(min=0, max=99), pins.gpio_output_pin_schema
+                    ),
                 }
             ),
             "module": COMMON_SCHEMA.extend(
                 {
-                    cv.Required(CONF_WIFI_RESET_PIN): cv.int_range(min=0, max=255),
-                    cv.Required(CONF_WIFI_LED_PIN): cv.int_range(min=0, max=255),
+                    cv.Optional(CONF_WIFI_RESET_PIN, default=0): cv.int_range(min=0, max=255),
+                    cv.Optional(CONF_WIFI_LED_PIN, default=0): cv.int_range(min=0, max=255),
                 }
             ),
         },
@@ -173,11 +175,17 @@ async def to_code(config):
 
     if config[CONF_WIFI_CONTROL_MODE] == "mcu":
         if CONF_WIFI_RESET_PIN in config:
-            reset_pin = await cg.gpio_pin_expression(config[CONF_WIFI_RESET_PIN])
-            cg.add(var.set_wifi_reset_pin(reset_pin))
+            if isinstance(config[CONF_WIFI_RESET_PIN], int):
+                cg.add(var.set_legacy_wifi_reset_pin(int(config[CONF_WIFI_RESET_PIN])))
+            else:
+                reset_pin = await cg.gpio_pin_expression(config[CONF_WIFI_RESET_PIN])
+                cg.add(var.set_wifi_reset_pin(reset_pin))
         if CONF_WIFI_LED_PIN in config:
-            led_pin = await cg.gpio_pin_expression(config[CONF_WIFI_LED_PIN])
-            cg.add(var.set_wifi_led_pin(led_pin))
+            if isinstance(config[CONF_WIFI_LED_PIN], int):
+                cg.add(var.set_legacy_wifi_led_pin(int(config[CONF_WIFI_LED_PIN])))
+            else:
+                led_pin = await cg.gpio_pin_expression(config[CONF_WIFI_LED_PIN])
+                cg.add(var.set_wifi_led_pin(led_pin))
     else:
         cg.add(var.set_module_wifi_reset_pin(config[CONF_WIFI_RESET_PIN]))
         cg.add(var.set_module_wifi_led_pin(config[CONF_WIFI_LED_PIN]))

@@ -15,6 +15,9 @@ void TuyaWifiMcuLightOutput::setup() {
     return;
   }
 
+  if (this->own_state_ != nullptr) {
+    this->own_state_->add_remote_values_listener(&this->own_listener_);
+  }
   if (this->bind_light_ != nullptr) {
     this->bind_light_->add_remote_values_listener(this);
   }
@@ -25,6 +28,7 @@ void TuyaWifiMcuLightOutput::on_light_remote_values_update() {
     return;
   }
 
+  this->preserve_downloaded_brightness_ = false;
   float brightness;
   this->bind_light_->remote_values.as_brightness(&brightness);
   const uint32_t tuya_brightness = tuya_brightness_from_linear(brightness);
@@ -52,6 +56,11 @@ void TuyaWifiMcuLightOutput::write_state(light::LightState *state) {
   float logical_brightness;
   const auto &logical_values = state->is_transformer_active() ? state->remote_values : state->current_values;
   logical_values.as_brightness(&logical_brightness);
+  // Float conversion and output saturation cannot round-trip every wire value.
+  if (this->preserve_downloaded_brightness_ && logical_brightness == this->downloaded_brightness_) {
+    return;
+  }
+  this->preserve_downloaded_brightness_ = false;
   const uint32_t tuya_brightness = tuya_brightness_from_linear(logical_brightness);
   if (this->tuya_brightness_ != tuya_brightness) {
     this->tuya_brightness_ = tuya_brightness;
@@ -67,14 +76,10 @@ bool TuyaWifiMcuLightOutput::process_dp_data(const uint8_t *value, uint16_t leng
   }
 
   const uint32_t tuya_brightness = decode_tuya_value(value);
-  if (tuya_brightness > 100) {
-    ESP_LOGW(TAG, "Ignoring out-of-range brightness %u for DP %u", static_cast<unsigned>(tuya_brightness),
-             this->get_dp_id());
-    return false;
-  }
-
-  this->tuya_brightness_ = tuya_brightness;
-  const float brightness = static_cast<float>(tuya_brightness) / 100.0f;
+  this->tuya_brightness_ = static_cast<uint8_t>(tuya_brightness);
+  const float brightness = std::min(1.0f, static_cast<float>(tuya_brightness) / 100.0f);
+  this->downloaded_brightness_ = brightness;
+  this->preserve_downloaded_brightness_ = true;
 
   this->syncing_ = true;
   if (this->own_state_ != nullptr) {

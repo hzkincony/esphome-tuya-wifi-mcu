@@ -40,7 +40,8 @@ static void test_brightness() {
   assert(tuya_brightness_from_linear(-1.0f) == 0);
   assert(tuya_brightness_from_linear(0.0f) == 0);
   assert(tuya_brightness_from_linear(0.004f) == 0);
-  assert(tuya_brightness_from_linear(0.005f) == 1);
+  assert(tuya_brightness_from_linear(0.005f) == 0);
+  assert(tuya_brightness_from_linear(0.429f) == 42);
   assert(tuya_brightness_from_linear(0.5f) == 50);
   assert(tuya_brightness_from_linear(1.0f) == 100);
   assert(tuya_brightness_from_linear(2.0f) == 100);

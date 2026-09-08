@@ -6,13 +6,14 @@ namespace esphome {
 namespace tuya_wifi_mcu {
 
 void TuyaWifiMcuBinarySensor::setup() {
-  this->add_on_state_callback([this](bool state) {
-    if (this->syncing_) {
+  this->add_full_state_callback([this](optional<bool>, optional<bool> current) {
+    if (this->syncing_ || !current.has_value()) {
       return;
     }
 
+    const bool state = current.value();
     this->syncing_ = true;
-    if (this->bind_binary_sensor_ != nullptr && this->bind_binary_sensor_->state != state) {
+    if (this->bind_binary_sensor_ != nullptr) {
       this->bind_binary_sensor_->publish_state(state);
     }
     this->syncing_ = false;
@@ -23,11 +24,12 @@ void TuyaWifiMcuBinarySensor::setup() {
   });
 
   if (this->bind_binary_sensor_ != nullptr) {
-    this->bind_binary_sensor_->add_on_state_callback([this](bool state) {
-      if (this->syncing_ || this->state == state) {
+    this->bind_binary_sensor_->add_full_state_callback([this](optional<bool>, optional<bool> current) {
+      if (this->syncing_ || !current.has_value()) {
         return;
       }
 
+      const bool state = current.value();
       this->syncing_ = true;
       this->publish_state(state);
       this->syncing_ = false;
@@ -44,16 +46,21 @@ bool TuyaWifiMcuBinarySensor::process_dp_data(const uint8_t *value, uint16_t len
     return false;
   }
 
-  const bool state = value[0] != 0;
-  if (this->state != state) {
-    this->publish_state(state);
-  }
+  // Forward every input so filters can cancel a pending transition.
+  this->publish_state(value[0] != 0);
   return true;
 }
 
 void TuyaWifiMcuBinarySensor::report_tuya_dp_state() {
   if (this->parent_ != nullptr) {
     this->parent_->report_bool_dp(this->get_dp_id(), this->state);
+  }
+}
+
+void TuyaWifiMcuBinarySensor::acknowledge_tuya_dp(const uint8_t *value, uint16_t) {
+  // A filter may delay publication, but the download acknowledgement echoes the accepted input.
+  if (this->parent_ != nullptr) {
+    this->parent_->report_bool_dp(this->get_dp_id(), value[0] != 0);
   }
 }
 

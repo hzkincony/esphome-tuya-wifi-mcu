@@ -20,7 +20,7 @@ TuyaWifiMcuBinarySensor = tuya_wifi_mcu_ns.class_(
 CONFIG_SCHEMA = binary_sensor.binary_sensor_schema(TuyaWifiMcuBinarySensor).extend(
     {
         cv.GenerateID(CONF_TUYA_WIFI_MCU_ID): cv.use_id(TuyaWifiMcuComponent),
-        cv.Required(CONF_DP_ID): cv.int_range(min=1, max=255),
+        cv.Required(CONF_DP_ID): cv.int_,
         cv.Optional(CONF_BIND_BINARY_SENSOR_ID): cv.use_id(
             binary_sensor.BinarySensor
         ),
@@ -34,7 +34,7 @@ async def to_code(config):
     await cg.register_component(var, config)
     await binary_sensor.register_binary_sensor(var, config)
 
-    cg.add(var.set_dp_id(config[CONF_DP_ID]))
+    cg.add(var.set_dp_id(config[CONF_DP_ID] & 0xFF))
     if CONF_BIND_BINARY_SENSOR_ID in config:
         bind_binary_sensor = await cg.get_variable(
             config[CONF_BIND_BINARY_SENSOR_ID]

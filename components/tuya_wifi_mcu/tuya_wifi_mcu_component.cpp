@@ -6,6 +6,10 @@
 #include "esphome/core/hal.h"
 #include "esphome/core/log.h"
 
+#ifdef USE_ESP32
+#include "esphome/components/esp32/gpio.h"
+#endif
+
 #include "tuya_dp_dispatch.h"
 
 namespace esphome {
@@ -18,11 +22,26 @@ static constexpr uint32_t RESET_DEBOUNCE_MS = 20;
 static constexpr uint32_t WIFI_LED_BLINK_INTERVAL_MS = 500;
 static constexpr size_t UART_READ_BATCH_SIZE = 64;
 
+static GPIOPin *make_legacy_wifi_pin(uint8_t number, bool output) {
+#ifdef USE_ESP32
+  if (GPIO_IS_VALID_GPIO(number) && (!output || GPIO_IS_VALID_OUTPUT_GPIO(number))) {
+    auto *pin = new esp32::ESP32InternalGPIOPin();
+    pin->set_pin(static_cast<gpio_num_t>(number));
+    pin->set_flags(output ? gpio::FLAG_OUTPUT : gpio::FLAG_INPUT);
+    pin->set_inverted(!output);
+    pin->set_drive_strength(GPIO_DRIVE_CAP_2);
+    return pin;
+  }
+#endif
+  ESP_LOGW(TAG, "Ignoring unavailable WiFi %s GPIO %u", output ? "LED" : "reset", number);
+  return nullptr;
+}
+
 void TuyaWifiMcuComponent::setup() {
   ESP_LOGD(TAG, "Setting up Tuya WiFi MCU component");
 
   for (auto *entity : this->entities_) {
-    if (entity == nullptr || entity->get_dp_id() == 0) {
+    if (entity == nullptr) {
       ESP_LOGE(TAG, "Invalid Tuya entity registration");
       this->mark_failed();
       return;
@@ -30,6 +49,12 @@ void TuyaWifiMcuComponent::setup() {
   }
 
   if (this->wifi_control_mode_ == WIFI_CONTROL_MODE_MCU) {
+    if (this->legacy_wifi_reset_pin_ != 0) {
+      this->wifi_reset_pin_ = make_legacy_wifi_pin(this->legacy_wifi_reset_pin_, false);
+    }
+    if (this->legacy_wifi_led_pin_ != 0) {
+      this->wifi_led_pin_ = make_legacy_wifi_pin(this->legacy_wifi_led_pin_, true);
+    }
     if (this->wifi_led_pin_ != nullptr) {
       this->wifi_led_pin_->setup();
       this->wifi_led_pin_->digital_write(false);

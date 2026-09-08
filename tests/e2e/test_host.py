@@ -58,7 +58,15 @@ class FirmwareTestResult(unittest.TextTestResult):
         self.print_firmware_log(test)
 
 
-class HostE2ETest(unittest.IsolatedAsyncioTestCase):
+class HostFirmwareTest(unittest.IsolatedAsyncioTestCase):
+    fixture = "host.yaml"
+    node_name = "tuya-host-e2e"
+    relay_dp = 1
+    input_dp = 2
+    dimmer_dp = 3
+    product_info = {"p": "hoste2etest", "v": "1.2.3", "m": 0}
+    mode_reply = b""
+
     @classmethod
     def setUpClass(cls):
         cls.workspace = tempfile.TemporaryDirectory(prefix="tuya-host-e2e-")
@@ -73,12 +81,12 @@ class HostE2ETest(unittest.IsolatedAsyncioTestCase):
                 sys.executable, "-m", "esphome",
                 "-s", "uart_path", str(cls.uart_path),
                 "-s", "api_port", str(cls.api_port),
-                "compile", str(HERE / "host.yaml"),
+                "compile", str(HERE / cls.fixture),
             ],
             check=True,
             timeout=600,
         )
-        cls.binary = HERE / ".esphome/build/tuya-host-e2e/.pioenvs/tuya-host-e2e/program"
+        cls.binary = HERE / f".esphome/build/{cls.node_name}/.pioenvs/{cls.node_name}/program"
         if not cls.binary.is_file():
             raise RuntimeError(f"ESPHome host executable not found: {cls.binary}")
 
@@ -97,7 +105,7 @@ class HostE2ETest(unittest.IsolatedAsyncioTestCase):
         self.addCleanup(self.loop.remove_reader, self.master)
         log_dir = HERE / ".esphome/logs"
         log_dir.mkdir(parents=True, exist_ok=True)
-        self.log_path = log_dir / f"{self._testMethodName}.log"
+        self.log_path = log_dir / f"{type(self).__name__}.{self._testMethodName}.log"
         self.log = self.log_path.open("wb")
         self.addCleanup(self.log.close)
         self.process = subprocess.Popen(
@@ -124,11 +132,11 @@ class HostE2ETest(unittest.IsolatedAsyncioTestCase):
         self.states = {}
         self.client.subscribe_states(self.on_state)
         await self.wait_state("Local Relay", lambda state: not state.state)
-        await self.expect_bool("Local Input", False)
-        await self.expect_bool("Tuya Input", False)
         await self.wait_state("Local Dimmer", lambda state: not state.state)
         await self.wait_state("Tuya Dimmer", lambda state: not state.state)
         await self.collect_frames(0.15)
+        if not self._testMethodName.startswith("test_first_input_"):
+            await self.download_initial_input(False)
 
     async def disconnect_client(self):
         await asyncio.wait_for(self.client.disconnect(), TIMEOUT)
@@ -228,10 +236,72 @@ class HostE2ETest(unittest.IsolatedAsyncioTestCase):
     async def query_states(self, relay=False, sensor=False, brightness=0):
         self.send(STATE_QUERY)
         await self.expect_frames([
-            (DP_UPLOAD, bool_dp(1, relay)),
-            (DP_UPLOAD, bool_dp(2, sensor)),
-            (DP_UPLOAD, value_dp(3, brightness)),
+            (DP_UPLOAD, bool_dp(self.relay_dp, relay)),
+            (DP_UPLOAD, bool_dp(self.input_dp, sensor)),
+            (DP_UPLOAD, value_dp(self.dimmer_dp, brightness)),
         ])
+
+    async def download_initial_input(self, value):
+        for name in ("Local Input", "Tuya Input"):
+            state = self.states.get(self.entities[name])
+            self.assertTrue(state is None or state.missing_state, f"{name} was already initialized")
+        self.send(DP_DOWNLOAD, bool_dp(self.input_dp, value))
+        await self.expect_frames([(DP_UPLOAD, bool_dp(self.input_dp, value))])
+        for name in ("Local Input", "Tuya Input"):
+            await self.expect_bool(name, value)
+
+
+class HostE2ETest(HostFirmwareTest):
+    async def test_first_input_false_download_initializes_both_sensors(self):
+        await self.download_initial_input(False)
+        await self.query_states()
+
+    async def test_first_input_true_download_initializes_both_sensors(self):
+        await self.download_initial_input(True)
+        await self.query_states(sensor=True)
+
+    async def test_remote_percentage_downloads_keep_exact_value(self):
+        for value in range(101):
+            with self.subTest(value=value):
+                self.send(DP_DOWNLOAD, value_dp(self.dimmer_dp, value))
+                await self.expect_frames([(DP_UPLOAD, value_dp(self.dimmer_dp, value))])
+                for name in ("Local Dimmer", "Tuya Dimmer"):
+                    await self.expect_light(name, value / 100)
+                await self.query_states(brightness=value)
+
+    async def test_legacy_brightness_downloads_preserve_byte_state(self):
+        for value in (101, 255, 256, 300, 0xFFFFFFFF):
+            with self.subTest(value=value):
+                self.send(DP_DOWNLOAD, value_dp(self.dimmer_dp, value))
+                await self.expect_frames([(DP_UPLOAD, value_dp(self.dimmer_dp, value & 0xFF))])
+                for name in ("Local Dimmer", "Tuya Dimmer"):
+                    await self.expect_light(name, 1.0)
+                for name in ("Local Output", "Tuya Output"):
+                    await self.wait_state(name, lambda state: state.state == 1.0)
+                await self.query_states(brightness=value & 0xFF)
+        for name in ("Local Dimmer", "Tuya Dimmer"):
+            with self.subTest(local_command=name):
+                self.send(DP_DOWNLOAD, value_dp(self.dimmer_dp, 300))
+                await self.expect_frames([(DP_UPLOAD, value_dp(self.dimmer_dp, 44))])
+                self.client.light_command(self.entities[name], state=True, brightness=1.0, transition_length=0)
+                await self.expect_frames([(DP_UPLOAD, value_dp(self.dimmer_dp, 100))])
+                await self.query_states(brightness=100)
+        self.send(DP_DOWNLOAD, value_dp(self.dimmer_dp, 0))
+        await self.expect_frames([(DP_UPLOAD, value_dp(self.dimmer_dp, 0))])
+        for name in ("Local Dimmer", "Tuya Dimmer"):
+            await self.expect_light(name, 0)
+        await self.query_states()
+
+    async def test_local_brightness_percentage_truncates(self):
+        for name in ("Local Dimmer", "Tuya Dimmer"):
+            for brightness, expected in ((0.429, 42), (0.005, 0)):
+                with self.subTest(name=name, brightness=brightness):
+                    self.client.light_command(
+                        self.entities[name], state=True, brightness=brightness, transition_length=0,
+                    )
+                    await self.expect_frames([(DP_UPLOAD, value_dp(self.dimmer_dp, expected))])
+                    await self.expect_light(name, brightness)
+                    await self.query_states(brightness=expected)
 
     async def test_handshake_and_state_query(self):
         self.send(HEARTBEAT)
@@ -241,20 +311,20 @@ class HostE2ETest(unittest.IsolatedAsyncioTestCase):
         self.send(PRODUCT_QUERY)
         command, payload = await self.next_frame()
         self.assertEqual(command, PRODUCT_QUERY)
-        self.assertEqual(json.loads(payload), {"p": "hoste2etest", "v": "1.2.3", "m": 0})
+        self.assertEqual(json.loads(payload), self.product_info)
         self.send(WORK_MODE_QUERY)
-        await self.expect_frames([(WORK_MODE_QUERY, b"")])
+        await self.expect_frames([(WORK_MODE_QUERY, self.mode_reply)])
         self.send(WIFI_STATE, b"\x04")
         await self.expect_frames([(WIFI_STATE, b"")])
         await self.query_states()
 
     async def test_remote_multi_dp_updates_bound_entities(self):
-        payload = bool_dp(1, True) + bool_dp(2, True) + value_dp(3, 42)
+        payload = bool_dp(self.relay_dp, True) + bool_dp(self.input_dp, True) + value_dp(self.dimmer_dp, 42)
         self.send(DP_DOWNLOAD, payload)
         await self.expect_frames([
-            (DP_UPLOAD, bool_dp(1, True)),
-            (DP_UPLOAD, bool_dp(2, True)),
-            (DP_UPLOAD, value_dp(3, 42)),
+            (DP_UPLOAD, bool_dp(self.relay_dp, True)),
+            (DP_UPLOAD, bool_dp(self.input_dp, True)),
+            (DP_UPLOAD, value_dp(self.dimmer_dp, 42)),
         ])
         for name in ("Local Relay", "Tuya Relay", "Local Input", "Tuya Input"):
             await self.expect_bool(name, True)
@@ -263,11 +333,11 @@ class HostE2ETest(unittest.IsolatedAsyncioTestCase):
         for name in ("Local Output", "Tuya Output"):
             await self.wait_state(name, lambda state: math.isclose(state.state, 0.42 ** 2.8, abs_tol=0.001))
         await self.query_states(relay=True, sensor=True, brightness=42)
-        self.send(DP_DOWNLOAD, bool_dp(1, False) + bool_dp(2, False) + value_dp(3, 0))
+        self.send(DP_DOWNLOAD, bool_dp(self.relay_dp, False) + bool_dp(self.input_dp, False) + value_dp(self.dimmer_dp, 0))
         await self.expect_frames([
-            (DP_UPLOAD, bool_dp(1, False)),
-            (DP_UPLOAD, bool_dp(2, False)),
-            (DP_UPLOAD, value_dp(3, 0)),
+            (DP_UPLOAD, bool_dp(self.relay_dp, False)),
+            (DP_UPLOAD, bool_dp(self.input_dp, False)),
+            (DP_UPLOAD, value_dp(self.dimmer_dp, 0)),
         ])
         for name in ("Local Relay", "Tuya Relay", "Local Input", "Tuya Input"):
             await self.expect_bool(name, False)
@@ -279,49 +349,48 @@ class HostE2ETest(unittest.IsolatedAsyncioTestCase):
     async def test_local_switch_and_input_report_to_tuya(self):
         for value in (True, False):
             self.client.switch_command(self.entities["Local Relay"], value)
-            await self.expect_frames([(DP_UPLOAD, bool_dp(1, value))])
+            await self.expect_frames([(DP_UPLOAD, bool_dp(self.relay_dp, value))])
             await self.expect_bool("Tuya Relay", value)
             await asyncio.wait_for(
                 self.client.execute_service(self.services["set_input"], {"value": value}), TIMEOUT,
             )
-            await self.expect_frames([(DP_UPLOAD, bool_dp(2, value))])
+            await self.expect_frames([(DP_UPLOAD, bool_dp(self.input_dp, value))])
             await self.expect_bool("Tuya Input", value)
         self.client.switch_command(self.entities["Tuya Relay"], True)
-        await self.expect_frames([(DP_UPLOAD, bool_dp(1, True))])
+        await self.expect_frames([(DP_UPLOAD, bool_dp(self.relay_dp, True))])
         await self.expect_bool("Local Relay", True)
 
     async def test_local_light_transition_reports_logical_brightness(self):
         self.client.light_command(
             self.entities["Local Dimmer"], state=True, brightness=0.73, transition_length=0.3,
         )
-        await self.expect_frames([(DP_UPLOAD, value_dp(3, 73))])
+        await self.expect_frames([(DP_UPLOAD, value_dp(self.dimmer_dp, 73))])
         await self.wait_state("Local Output", lambda state: math.isclose(state.state, 0.73 ** 2.8, abs_tol=0.001))
         self.assertEqual(await self.collect_frames(0.2), [])
         await self.query_states(brightness=73)
         self.client.light_command(self.entities["Local Dimmer"], state=False, transition_length=0)
-        await self.expect_frames([(DP_UPLOAD, value_dp(3, 0))])
+        await self.expect_frames([(DP_UPLOAD, value_dp(self.dimmer_dp, 0))])
         self.client.light_command(self.entities["Tuya Dimmer"], state=True, brightness=0.28, transition_length=0.3)
-        await self.expect_frames([(DP_UPLOAD, value_dp(3, 28))])
+        await self.expect_frames([(DP_UPLOAD, value_dp(self.dimmer_dp, 28))])
         await self.wait_state("Tuya Output", lambda state: math.isclose(state.state, 0.28 ** 2.8, abs_tol=0.001))
         self.assertEqual(await self.collect_frames(0.2), [])
         await self.query_states(brightness=28)
 
     async def test_repeated_download_is_acknowledged_once(self):
         for _ in range(2):
-            self.send(DP_DOWNLOAD, bool_dp(1, True))
-            await self.expect_frames([(DP_UPLOAD, bool_dp(1, True))])
+            self.send(DP_DOWNLOAD, bool_dp(self.relay_dp, True))
+            await self.expect_frames([(DP_UPLOAD, bool_dp(self.relay_dp, True))])
         await self.expect_bool("Local Relay", True)
 
     async def test_invalid_downloads_do_not_change_state(self):
-        bad_checksum = bytearray(frame(DP_DOWNLOAD, bool_dp(1, True)))
+        bad_checksum = bytearray(frame(DP_DOWNLOAD, bool_dp(self.relay_dp, True)))
         bad_checksum[-1] ^= 0x80
         self.send_raw(bad_checksum)
         for payload in (
             bool_dp(99, True),
-            value_dp(1, 1),
-            bool_dp(1, 2),
-            value_dp(3, 101),
-            bool_dp(1, True) + b"\x02\x01\x00",
+            value_dp(self.relay_dp, 1),
+            bool_dp(self.relay_dp, 2),
+            bool_dp(self.relay_dp, True) + b"\x02\x01\x00",
             b"",
         ):
             self.send(DP_DOWNLOAD, payload)
@@ -330,28 +399,74 @@ class HostE2ETest(unittest.IsolatedAsyncioTestCase):
             await self.expect_bool(name, False)
         for name in ("Local Dimmer", "Tuya Dimmer"):
             await self.expect_light(name, 0)
-        self.send(DP_DOWNLOAD, bool_dp(1, True))
-        await self.expect_frames([(DP_UPLOAD, bool_dp(1, True))])
+        self.send(DP_DOWNLOAD, bool_dp(self.relay_dp, True))
+        await self.expect_frames([(DP_UPLOAD, bool_dp(self.relay_dp, True))])
         await self.expect_bool("Local Relay", True)
 
     async def test_fragmented_frame_and_idle_timeout_recovery(self):
-        data = frame(DP_DOWNLOAD, value_dp(3, 65))
+        data = frame(DP_DOWNLOAD, value_dp(self.dimmer_dp, 65))
         for chunk in (data[:1], data[1:5], data[5:8], data[8:]):
             self.send_raw(chunk)
             await asyncio.sleep(0.02)
-        await self.expect_frames([(DP_UPLOAD, value_dp(3, 65))])
+        await self.expect_frames([(DP_UPLOAD, value_dp(self.dimmer_dp, 65))])
         await self.expect_light("Local Dimmer", 0.65)
-        self.send_raw(frame(DP_DOWNLOAD, bool_dp(1, True))[:-2])
+        self.send_raw(frame(DP_DOWNLOAD, bool_dp(self.relay_dp, True))[:-2])
         await asyncio.sleep(0.4)
         self.send(HEARTBEAT)
         await self.expect_frames([(HEARTBEAT, b"\x00")])
         await self.query_states(brightness=65)
 
     async def test_oversized_frame_skips_embedded_commands(self):
-        embedded = frame(DP_DOWNLOAD, bool_dp(1, True))
+        embedded = frame(DP_DOWNLOAD, bool_dp(self.relay_dp, True))
         self.send_raw(frame(DP_DOWNLOAD, embedded + bytes(1025 - len(embedded))))
         self.send(HEARTBEAT)
         await self.expect_frames([(HEARTBEAT, b"\x00")])
+        await self.query_states()
+
+
+class LegacyHostE2ETest(HostE2ETest):
+    fixture = "host-legacy.yaml"
+    node_name = "tuya-host-legacy-e2e"
+    relay_dp = 0
+    input_dp = 255
+    dimmer_dp = 3
+    product_info = {"p": "1234567890123456", "v": "1.2.3", "m": 0}
+    mode_reply = b"\x00\x00"
+
+
+class FilteredHostE2ETest(HostFirmwareTest):
+    fixture = "host-filtered.yaml"
+    node_name = "tuya-host-filtered-e2e"
+
+    async def test_first_input_filtered_true_waits_for_publication(self):
+        self.send(DP_DOWNLOAD, bool_dp(self.input_dp, True))
+        await self.expect_frames([(DP_UPLOAD, bool_dp(self.input_dp, True))])
+        for name in ("Local Input", "Tuya Input"):
+            state = self.states.get(self.entities[name])
+            self.assertTrue(state is None or state.missing_state, f"{name} bypassed its filter")
+        await self.expect_frames([(DP_UPLOAD, bool_dp(self.input_dp, True))])
+        for name in ("Local Input", "Tuya Input"):
+            await self.expect_bool(name, True)
+        await self.query_states(sensor=True)
+
+    async def test_input_filter_delays_and_cancels_remote_changes(self):
+        self.send(DP_DOWNLOAD, bool_dp(self.input_dp, True))
+        await self.expect_frames([(DP_UPLOAD, bool_dp(self.input_dp, True))])
+        for name in ("Local Input", "Tuya Input"):
+            self.assertFalse(self.states[self.entities[name]].state, f"{name} bypassed its filter")
+        await self.query_states(sensor=False)
+        await self.expect_frames([(DP_UPLOAD, bool_dp(self.input_dp, True))])
+        for name in ("Local Input", "Tuya Input"):
+            await self.expect_bool(name, True)
+        self.send(DP_DOWNLOAD, bool_dp(self.input_dp, False))
+        await self.expect_frames([(DP_UPLOAD, bool_dp(self.input_dp, False))])
+        self.send(DP_DOWNLOAD, bool_dp(self.input_dp, True))
+        await self.expect_frames([(DP_UPLOAD, bool_dp(self.input_dp, True))])
+        self.send(DP_DOWNLOAD, bool_dp(self.input_dp, False))
+        await self.expect_frames([(DP_UPLOAD, bool_dp(self.input_dp, False))])
+        self.assertEqual(await self.collect_frames(1.1), [])
+        for name in ("Local Input", "Tuya Input"):
+            await self.expect_bool(name, False)
         await self.query_states()
 
 

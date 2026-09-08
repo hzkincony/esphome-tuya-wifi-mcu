@@ -35,11 +35,13 @@ class TuyaWifiMcuComponent : public PollingComponent,
   void loop() override;
   float get_setup_priority() const override;
 
-  void set_product_id(const std::string &product_id) { this->product_id_ = product_id; }
-  void set_version(const std::string &mcu_version) { this->mcu_version_ = mcu_version; }
+  void set_product_id(const std::string &product_id) { this->product_id_ = product_id.substr(0, 16); }
+  void set_version(const std::string &mcu_version) { this->mcu_version_ = mcu_version.substr(0, 5); }
   void set_wifi_control_mode(WifiControlMode mode) { this->wifi_control_mode_ = mode; }
   void set_wifi_reset_pin(GPIOPin *wifi_reset_pin) { this->wifi_reset_pin_ = wifi_reset_pin; }
   void set_wifi_led_pin(GPIOPin *wifi_led_pin) { this->wifi_led_pin_ = wifi_led_pin; }
+  void set_legacy_wifi_reset_pin(uint8_t pin) { this->legacy_wifi_reset_pin_ = pin; }
+  void set_legacy_wifi_led_pin(uint8_t pin) { this->legacy_wifi_led_pin_ = pin; }
   void set_module_wifi_reset_pin(uint8_t wifi_reset_pin) { this->module_wifi_reset_pin_ = wifi_reset_pin; }
   void set_module_wifi_led_pin(uint8_t wifi_led_pin) { this->module_wifi_led_pin_ = wifi_led_pin; }
 
@@ -70,6 +72,8 @@ class TuyaWifiMcuComponent : public PollingComponent,
   WifiControlMode wifi_control_mode_{WIFI_CONTROL_MODE_MCU};
   GPIOPin *wifi_reset_pin_{nullptr};
   GPIOPin *wifi_led_pin_{nullptr};
+  uint8_t legacy_wifi_reset_pin_{0};
+  uint8_t legacy_wifi_led_pin_{0};
   uint8_t module_wifi_reset_pin_{0};
   uint8_t module_wifi_led_pin_{0};
   uint8_t wifi_work_state_{0xFF};

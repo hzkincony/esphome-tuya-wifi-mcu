@@ -1,6 +1,9 @@
 substitutions:
   uart_path: /tmp/tuya-host-e2e-uart
   api_port: "16053"
+  relay_dp: "1"
+  input_dp: "2"
+  dimmer_dp: "3"
 
 esphome:
   name: tuya-host-e2e
@@ -9,13 +12,6 @@ esphome:
     then:
       # State queries exercise reporting without randomized polling during assertions.
       - component.suspend: tuya_mcu
-      # Initial binary sensor publications do not invoke state callbacks.
-      - binary_sensor.template.publish:
-          id: local_input
-          state: OFF
-      - binary_sensor.template.publish:
-          id: tuya_input
-          state: OFF
 
 host:
 
@@ -62,7 +58,7 @@ switch:
   - platform: tuya_wifi_mcu
     id: tuya_relay
     name: Tuya Relay
-    dp_id: 1
+    dp_id: ${relay_dp}
     bind_switch_id: local_relay
     restore_mode: ALWAYS_OFF
 
@@ -73,7 +69,7 @@ binary_sensor:
   - platform: tuya_wifi_mcu
     id: tuya_input
     name: Tuya Input
-    dp_id: 2
+    dp_id: ${input_dp}
     bind_binary_sensor_id: local_input
 
 sensor:
@@ -115,7 +111,7 @@ light:
     name: Tuya Dimmer
     output: tuya_output
     bind_light_id: local_dimmer
-    dp_id: 3
+    dp_id: ${dimmer_dp}
     gamma_correct: 2.8
     default_transition_length: 0s
     restore_mode: ALWAYS_OFF

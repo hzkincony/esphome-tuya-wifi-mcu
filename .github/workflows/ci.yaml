@@ -45,6 +45,7 @@ jobs:
           - arduino-module
           - esp-idf-mcu
           - esp-idf-module
+          - legacy-main
     steps:
       - uses: actions/checkout@v4
       - name: Validate configuration

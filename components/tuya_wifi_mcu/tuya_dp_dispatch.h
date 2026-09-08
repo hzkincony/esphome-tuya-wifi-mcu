@@ -47,7 +47,7 @@ inline TuyaDpDispatchResult dispatch_tuya_dp(const std::vector<TuyaWifiMcuEntity
   }
 
   if (ack_entity != nullptr) {
-    ack_entity->report_tuya_dp_state();
+    ack_entity->acknowledge_tuya_dp(value, length);
   }
   return result;
 }

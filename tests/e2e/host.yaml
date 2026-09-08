@@ -1,0 +1,121 @@
+substitutions:
+  uart_path: /tmp/tuya-host-e2e-uart
+  api_port: "16053"
+
+esphome:
+  name: tuya-host-e2e
+  on_boot:
+    priority: -100
+    then:
+      # State queries exercise reporting without randomized polling during assertions.
+      - component.suspend: tuya_mcu
+      # Initial binary sensor publications do not invoke state callbacks.
+      - binary_sensor.template.publish:
+          id: local_input
+          state: OFF
+      - binary_sensor.template.publish:
+          id: tuya_input
+          state: OFF
+
+host:
+
+logger:
+  level: DEBUG
+
+api:
+  port: ${api_port}
+  reboot_timeout: 0s
+  batch_delay: 0ms
+  actions:
+    - action: set_input
+      variables:
+        value: bool
+      then:
+        - binary_sensor.template.publish:
+            id: local_input
+            state: !lambda return value;
+
+external_components:
+  - source:
+      type: local
+      path: ../../components
+
+uart:
+  id: tuya_uart
+  port: ${uart_path}
+  baud_rate: 9600
+  rx_buffer_size: 2048
+
+tuya_wifi_mcu:
+  id: tuya_mcu
+  product_id: "hoste2etest"
+  mcu_version: "1.2.3"
+  uart_id: tuya_uart
+  wifi_control_mode: mcu
+
+switch:
+  - platform: template
+    id: local_relay
+    name: Local Relay
+    optimistic: true
+    restore_mode: ALWAYS_OFF
+  - platform: tuya_wifi_mcu
+    id: tuya_relay
+    name: Tuya Relay
+    dp_id: 1
+    bind_switch_id: local_relay
+    restore_mode: ALWAYS_OFF
+
+binary_sensor:
+  - platform: template
+    id: local_input
+    name: Local Input
+  - platform: tuya_wifi_mcu
+    id: tuya_input
+    name: Tuya Input
+    dp_id: 2
+    bind_binary_sensor_id: local_input
+
+sensor:
+  - platform: template
+    id: local_output_level
+    name: Local Output
+    update_interval: never
+  - platform: template
+    id: tuya_output_level
+    name: Tuya Output
+    update_interval: never
+
+output:
+  - platform: template
+    id: local_output
+    type: float
+    write_action:
+      - sensor.template.publish:
+          id: local_output_level
+          state: !lambda return state;
+  - platform: template
+    id: tuya_output
+    type: float
+    write_action:
+      - sensor.template.publish:
+          id: tuya_output_level
+          state: !lambda return state;
+
+light:
+  - platform: monochromatic
+    id: local_dimmer
+    name: Local Dimmer
+    output: local_output
+    gamma_correct: 2.8
+    default_transition_length: 0s
+    restore_mode: ALWAYS_OFF
+  - platform: tuya_wifi_mcu
+    id: tuya_dimmer
+    name: Tuya Dimmer
+    output: tuya_output
+    bind_light_id: local_dimmer
+    dp_id: 3
+    gamma_correct: 2.8
+    default_transition_length: 0s
+    restore_mode: ALWAYS_OFF

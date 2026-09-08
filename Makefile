@@ -15,12 +15,13 @@ DOCKER_RUN = $(DOCKER) run --rm \
 ESPHOME ?= $(DOCKER_RUN) --entrypoint esphome $(ESPHOME_IMAGE)
 PYTHON ?= $(DOCKER_RUN) --entrypoint python $(ESPHOME_IMAGE)
 
-.PHONY: help host-test protocol-test helper-test config-test config compile config-all compile-all test ci clean \
+.PHONY: help host-test e2e-test protocol-test helper-test config-test config compile config-all compile-all test ci clean \
 	$(addprefix config-,$(FIXTURES)) $(addprefix compile-,$(FIXTURES))
 
 help:
 	@printf '%s\n' \
 		'make host-test             Build and run framework-independent C++ tests' \
+		'make e2e-test              Compile and run ESPHome host UART/API e2e tests' \
 		'make config-test           Run Python configuration compatibility tests' \
 		'make config-all            Validate all ESPHome fixtures in Docker' \
 		'make compile-all           Compile all ESPHome fixtures in Docker' \
@@ -46,6 +47,9 @@ helper-test: | $(BUILD_DIR)
 
 host-test: protocol-test helper-test
 
+e2e-test:
+	$(PYTHON) tests/e2e/test_host.py
+
 config-test:
 	$(PYTHON) tests/config/test_config.py
 
@@ -67,9 +71,9 @@ config-all: $(addprefix config-,$(FIXTURES))
 
 compile-all: $(addprefix compile-,$(FIXTURES))
 
-test: host-test config-test config-all
+test: host-test e2e-test config-test config-all
 
-ci: host-test config-test config-all compile-all
+ci: host-test e2e-test config-test config-all compile-all
 
 clean:
-	rm -rf .cache .esphome tests/compile/.esphome
+	rm -rf .cache .esphome tests/compile/.esphome tests/e2e/.esphome

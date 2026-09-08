@@ -131,6 +131,8 @@ With Docker installed, the Makefile pins the official `ghcr.io/esphome/esphome:2
 
 ```bash
 make host-test
+make e2e-test
+make config-test
 make config-all
 make compile-all
 # Or run the complete matrix:
@@ -144,4 +146,24 @@ Override `ESPHOME_VERSION` or `ESPHOME_IMAGE` only when deliberately testing ano
 - ESP-IDF + MCU-managed WiFi controls
 - ESP-IDF + Tuya-module controls
 
-The framework-independent host tests cover framing, checksums, fragmentation, explicit idle timeout recovery, bounded oversized-frame skipping, duplicate-DP dispatch, brightness conversion, Boolean DP frame encoding, and four-byte value encoding.
+The framework-independent `make host-test` tests cover framing, checksums, fragmentation, explicit idle timeout recovery, bounded oversized-frame skipping, duplicate-DP dispatch, brightness conversion, Boolean DP frame encoding, and four-byte value encoding.
+
+### ESPHome host end-to-end tests
+
+`make e2e-test` compiles `tests/e2e/host.yaml` with the real ESPHome `host` platform, then runs eight Python `unittest` scenarios. Each scenario starts a fresh native firmware process and connects it to a simulated Tuya module through a POSIX pseudo-terminal (PTY). An `aioesphomeapi` client controls and subscribes to the real ESPHome entities over the native API; no ESPHome runtime or component is mocked.
+
+The scenarios cover:
+
+- Heartbeat, product/work-mode queries, WiFi-state acknowledgement, and full DP state queries.
+- Multi-DP downloads updating bound switches, binary sensors, lights, and observable output levels.
+- Local switch/input changes uploading DPs, plus switch control through the Tuya entity.
+- Local and Tuya light transitions reporting logical 0–100 brightness rather than gamma-corrected output or intermediate transition values.
+- Repeated-download acknowledgements without duplicate/feedback-loop uploads.
+- Bad checksums, unknown IDs, wrong DP types, invalid Boolean/brightness values, and malformed aggregate downloads.
+- Fragmented UART frames, idle timeout recovery, and oversized frames containing embedded commands.
+
+The Python runner and firmware execute in the same pinned Docker container, so no board, serial device mapping, Home Assistant instance, exposed port, or additional Python packages are required. The first build downloads the PlatformIO native platform; later builds reuse `.cache/` and `tests/e2e/.esphome/`. For an existing local Linux ESPHome environment with a C++ compiler, use `make e2e-test PYTHON=python3` instead.
+
+The fixture uses MCU control mode without GPIOs, explicitly initializes both binary sensors, and suspends periodic polling to keep unsolicited reports out of assertions. Full-state reporting is exercised with protocol state queries. Initial-state callback semantics, physical GPIO behavior, the 60-second polling cadence, and the Tuya cloud are not covered by these host tests; the ESP32 compilation matrix remains separate.
+
+Every run uses a temporary UART symlink, an available API port, and isolated preference storage. API/UART waits and compilation have timeouts, and firmware processes are terminated even when a test fails. Firmware logs are saved under `tests/e2e/.esphome/logs/`; failed tests also print their firmware log. CI runs `make e2e-test` as a separate job and uploads these logs on failure. Both `make test` and `make ci` include the e2e suite.

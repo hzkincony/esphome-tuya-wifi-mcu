@@ -1,6 +1,9 @@
 esphome:
   name: tuya_wifi_mcu_idf_example
   friendly_name: Tuya WiFi MCU ESP-IDF Example
+  platformio_options:
+    board_build.extra_flags:
+      - "-DWIFI_CONTROL_SELF_MODE=0"
 
 esp32:
   board: esp32-s3-devkitc-1
@@ -16,20 +19,15 @@ external_components:
 
 uart:
   id: tuya_mcu_uart
-  tx_pin: GPIO33
-  rx_pin: GPIO14
+  tx_pin: 33
+  rx_pin: 14
   baud_rate: 9600
-  rx_buffer_size: 1024
 
 tuya_wifi_mcu:
   product_id: "abcdefghijklmnop"
-  mcu_version: "1.0.0"
   uart_id: tuya_mcu_uart
-  wifi_control_mode: mcu
-  wifi_reset_pin:
-    number: GPIO5
-    mode: INPUT_PULLUP
-  wifi_led_pin: GPIO12
+  wifi_reset_pin: 5
+  wifi_led_pin: 12
 
 switch:
   - platform: template

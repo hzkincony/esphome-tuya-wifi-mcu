@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  host-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and run host tests
+        run: make host-test
+
+  e2e-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and run ESPHome host e2e tests
+        run: make e2e-test
+      - name: Upload host firmware logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: host-e2e-logs
+          path: tests/e2e/.esphome/logs/*.log
+          include-hidden-files: true
+          if-no-files-found: ignore
+
+  config-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run configuration compatibility tests
+        run: make config-test
+
+  compile:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        fixture:
+          - arduino-mcu
+          - arduino-module
+          - esp-idf-mcu
+          - esp-idf-module
+          - legacy-main
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate configuration
+        run: make config-${{ matrix.fixture }}
+      - name: Compile firmware
+        run: make compile-${{ matrix.fixture }}

@@ -1,59 +1,72 @@
 #include "tuya_wifi_mcu_binary_sensor.h"
 
+#include "../tuya_wifi_mcu_component.h"
+
 namespace esphome {
-  namespace tuya_wifi_mcu {
-    void TuyaWifiMcuBinarySensor::setup() {
-      ESP_LOGD(TAG, "TuyaWifiMcuBinarySensor::setup");
+namespace tuya_wifi_mcu {
 
-      this->add_on_state_callback([this](bool state) {
-        ESP_LOGD(TAG, "state_callback, state=%d", state ? 1 : 0);
-        unsigned char tuya_dp_state = state ? 1 : 0;
-        if (this->tuya_wifi_ == nullptr) {
-          return;
-        }
-        this->tuya_wifi_->mcu_dp_update(dp_id_, tuya_dp_state, 1);
-        ESP_LOGD(TAG, "updated dp=%d state=%d", dp_id_, tuya_dp_state);
-
-        if (this->is_bind_) {
-          this->bind_binary_sensor_->publish_state(state);
-        }
-      });
-
-      if (this->is_bind_) {
-        this->bind_binary_sensor_->add_on_state_callback([this](bool state) {
-          ESP_LOGD(TAG, "bind_binary_sensor state_callback, state=%d", state ? 1 : 0);
-          this->publish_state(state);
-        });
-      }
-      
+void TuyaWifiMcuBinarySensor::setup() {
+  this->add_full_state_callback([this](optional<bool>, optional<bool> current) {
+    if (this->syncing_ || !current.has_value()) {
+      return;
     }
 
-    void TuyaWifiMcuBinarySensor::process_dp_data(const unsigned char value[], unsigned short length) {
-      if (this->tuya_wifi_ == nullptr) {
+    const bool state = current.value();
+    this->syncing_ = true;
+    if (this->bind_binary_sensor_ != nullptr) {
+      this->bind_binary_sensor_->publish_state(state);
+    }
+    this->syncing_ = false;
+
+    if (!this->is_processing_remote()) {
+      this->report_tuya_dp_state();
+    }
+  });
+
+  if (this->bind_binary_sensor_ != nullptr) {
+    this->bind_binary_sensor_->add_full_state_callback([this](optional<bool>, optional<bool> current) {
+      if (this->syncing_ || !current.has_value()) {
         return;
       }
-      auto state = this->tuya_wifi_->mcu_get_dp_download_data(this->dp_id_, value, length);
-      if (state == 1) {
-        this->publish_state(true);
-      } else if (state == 0) {
-        this->publish_state(false);
-      } else {
-        // wrong state
-      }
-    }
 
-    void TuyaWifiMcuBinarySensor::report_tuya_dp_state() {
-      if (this->tuya_wifi_ == nullptr) {
-        return;
-      }
-      unsigned char tuya_dp_state = this->state ? 1 : 0;
-      this->tuya_wifi_->mcu_dp_update(this->get_dp_id(), tuya_dp_state, 1);
-      ESP_LOGD(TAG, "updated dp=%d state=%d", this->get_dp_id(), tuya_dp_state);
-    }
+      const bool state = current.value();
+      this->syncing_ = true;
+      this->publish_state(state);
+      this->syncing_ = false;
 
-    void TuyaWifiMcuBinarySensor::dump_config(){
-      ESP_LOGCONFIG(TAG, "TuyaWifiMcuBinarySensor::dump_config");
-    }
-    
+      if (!this->is_processing_remote()) {
+        this->report_tuya_dp_state();
+      }
+    });
   }
 }
+
+bool TuyaWifiMcuBinarySensor::process_dp_data(const uint8_t *value, uint16_t length) {
+  if (length != 1 || value[0] > 1) {
+    return false;
+  }
+
+  // Forward every input so filters can cancel a pending transition.
+  this->publish_state(value[0] != 0);
+  return true;
+}
+
+void TuyaWifiMcuBinarySensor::report_tuya_dp_state() {
+  if (this->parent_ != nullptr) {
+    this->parent_->report_bool_dp(this->get_dp_id(), this->state);
+  }
+}
+
+void TuyaWifiMcuBinarySensor::acknowledge_tuya_dp(const uint8_t *value, uint16_t) {
+  // A filter may delay publication, but the download acknowledgement echoes the accepted input.
+  if (this->parent_ != nullptr) {
+    this->parent_->report_bool_dp(this->get_dp_id(), value[0] != 0);
+  }
+}
+
+void TuyaWifiMcuBinarySensor::dump_config() {
+  ESP_LOGCONFIG(TAG, "Tuya WiFi MCU binary sensor DP %u", this->get_dp_id());
+}
+
+}  // namespace tuya_wifi_mcu
+}  // namespace esphome

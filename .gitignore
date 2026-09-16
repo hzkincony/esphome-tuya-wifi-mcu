@@ -33,4 +33,5 @@
 
 __pycache__
 *~undo-tree~
+.cache/
 .esphome
